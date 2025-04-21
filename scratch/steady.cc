@@ -33,7 +33,7 @@
  #include "ns3/internet-module.h"
  #include "ns3/nada-header.h"
  #include "ns3/nada-udp-client.h"
- #include "ns3/nada.h"
+ #include "ns3/nada-improved.h"
  #include "ns3/network-module.h"
  #include "ns3/point-to-point-module.h"
  #include "ns3/traffic-control-module.h"

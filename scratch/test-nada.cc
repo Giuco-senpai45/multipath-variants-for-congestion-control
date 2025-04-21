@@ -13,7 +13,7 @@
 
 #include "ns3/nada-header.h"
 #include "ns3/nada-udp-client.h"
-#include "ns3/nada.h"
+#include "ns3/nada-improved.h"
 
 using namespace ns3;
 

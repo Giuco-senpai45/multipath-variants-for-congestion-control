@@ -1,45 +1,47 @@
 #include "nada-udp-client.h"
 
-#include "ns3/log.h"
-#include "ns3/udp-socket-factory.h"
-#include "ns3/names.h"
+#include "nada-header.h"
+#include "nada-improved.h"
+
 #include "ns3/applications-module.h"
-#include "nada.h"
+#include "ns3/log.h"
+#include "ns3/names.h"
+#include "ns3/udp-socket-factory.h"
 
 namespace ns3
 {
-    // UdpNadaClient implementation
+// UdpNadaClient implementation
 NS_LOG_COMPONENT_DEFINE("UdpNadaClient");
 NS_OBJECT_ENSURE_REGISTERED(UdpNadaClient);
 
 TypeId
 UdpNadaClient::GetTypeId(void)
 {
-  static TypeId tid = TypeId("ns3::UdpNadaClient")
-    .SetParent<Application>()
-    .SetGroupName("Applications")
-    .AddConstructor<UdpNadaClient>()
-    .AddAttribute("PacketSize",
-                  "Size of packets generated",
-                  UintegerValue(1024),
-                  MakeUintegerAccessor(&UdpNadaClient::m_packetSize),
-                  MakeUintegerChecker<uint32_t>(1, 1500))
-    .AddAttribute("MaxPackets",
-                  "The maximum number of packets the app will send",
-                  UintegerValue(0),
-                  MakeUintegerAccessor(&UdpNadaClient::m_numPackets),
-                  MakeUintegerChecker<uint32_t>())
-    .AddAttribute("Interval",
-                  "The time to wait between packets",
-                  TimeValue(Seconds(1.0)),
-                  MakeTimeAccessor(&UdpNadaClient::m_interval),
-                  MakeTimeChecker())
-    .AddAttribute("RemoteAddress",
-                  "The destination Address",
-                  AddressValue(),
-                  MakeAddressAccessor(&UdpNadaClient::m_peer),
-                  MakeAddressChecker());
-  return tid;
+    static TypeId tid = TypeId("ns3::UdpNadaClient")
+                            .SetParent<Application>()
+                            .SetGroupName("Applications")
+                            .AddConstructor<UdpNadaClient>()
+                            .AddAttribute("PacketSize",
+                                          "Size of packets generated",
+                                          UintegerValue(1024),
+                                          MakeUintegerAccessor(&UdpNadaClient::m_packetSize),
+                                          MakeUintegerChecker<uint32_t>(1, 1500))
+                            .AddAttribute("MaxPackets",
+                                          "The maximum number of packets the app will send",
+                                          UintegerValue(0),
+                                          MakeUintegerAccessor(&UdpNadaClient::m_numPackets),
+                                          MakeUintegerChecker<uint32_t>())
+                            .AddAttribute("Interval",
+                                          "The time to wait between packets",
+                                          TimeValue(Seconds(1.0)),
+                                          MakeTimeAccessor(&UdpNadaClient::m_interval),
+                                          MakeTimeChecker())
+                            .AddAttribute("RemoteAddress",
+                                          "The destination Address",
+                                          AddressValue(),
+                                          MakeAddressAccessor(&UdpNadaClient::m_peer),
+                                          MakeAddressChecker());
+    return tid;
 }
 
 UdpNadaClient::UdpNadaClient()
@@ -47,7 +49,12 @@ UdpNadaClient::UdpNadaClient()
       m_numPackets(0),
       m_interval(Seconds(0.05)),
       m_running(false),
-      m_packetsSent(0)
+      m_packetsSent(0),
+      m_sequence(0),
+      m_videoMode(false),
+      m_currentFrameSize(0),
+      m_currentFrameType(DELTA_FRAME),
+      m_overheadRatio(1.0)
 {
     NS_LOG_FUNCTION(this);
 }
@@ -84,6 +91,13 @@ UdpNadaClient::SetRemote(Address addr)
 }
 
 void
+UdpNadaClient::SetOverheadFactor(double factor)
+{
+    NS_LOG_FUNCTION(this << factor);
+    m_overheadRatio = factor;
+}
+
+void
 UdpNadaClient::SendPacket(Ptr<Packet> packet)
 {
     NS_LOG_FUNCTION(this << packet);
@@ -107,12 +121,12 @@ UdpNadaClient::SendPacket(Ptr<Packet> packet)
     }
 
     // Add protocol overhead ratio
-    header.SetOverheadRatio(1.0); // Default 1.0 = no adjustment
+    header.SetOverheadFactor(m_overheadRatio); // Use SetOverheadFactor instead of SetOverheadRatio
 
     packet->AddHeader(header);
 
     NS_LOG_INFO("Sending packet at " << Simulator::Now().GetSeconds()
-                << " seq=" << header.GetSequenceNumber());
+                                     << " seq=" << header.GetSequenceNumber());
     m_socket->Send(packet);
     m_packetsSent++;
 
@@ -123,7 +137,7 @@ UdpNadaClient::SendPacket(Ptr<Packet> packet)
 Ptr<Socket>
 UdpNadaClient::GetSocket() const
 {
-  return m_socket;
+    return m_socket;
 }
 
 void
@@ -133,6 +147,57 @@ UdpNadaClient::DoDispose(void)
     m_socket = 0;
     m_nada = 0;
     Application::DoDispose();
+}
+
+void
+UdpNadaClient::SetVideoMode(bool enable)
+{
+    NS_LOG_FUNCTION(this << enable);
+    m_videoMode = enable;
+
+    // Also enable video mode in the NADA controller
+    if (m_nada)
+    {
+        m_nada->SetVideoMode(enable);
+    }
+
+    if (enable)
+    {
+        // Initialize with reasonable defaults
+        m_currentFrameSize = m_packetSize;
+        m_currentFrameType = DELTA_FRAME;
+        NS_LOG_INFO("Video mode enabled");
+    }
+}
+
+void
+UdpNadaClient::SetVideoFrameSize(uint32_t size)
+{
+    NS_LOG_FUNCTION(this << size);
+    m_currentFrameSize = size;
+}
+
+void
+UdpNadaClient::SetVideoFrameType(VideoFrameType type)
+{
+    NS_LOG_FUNCTION(this << type);
+    m_currentFrameType = type;
+
+    // If it's a key frame, notify the congestion controller
+    if (type == KEY_FRAME && m_nada)
+    {
+        // For improved implementation, we can now use the proper method if available
+        // in the improved NADA implementation
+        // Convert from enum to uint8_t as expected by header
+        m_currentFrameType = type;
+    }
+}
+
+void
+UdpNadaClient::SetOverheadRatio(double ratio)
+{
+    NS_LOG_FUNCTION(this << ratio);
+    m_overheadRatio = ratio;
 }
 
 void
@@ -256,7 +321,6 @@ UdpNadaClient::Send(void)
     NS_LOG_INFO("Next packet scheduled in " << nextInterval.GetSeconds() << "s (rate: "
                                             << sendingRate.GetBitRate() / 1000000.0 << " Mbps)");
 
-    // Schedule next packet transmission
     if (m_running)
     {
         m_sendEvent = Simulator::Schedule(nextInterval, &UdpNadaClient::Send, this);
