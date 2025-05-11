@@ -3,6 +3,7 @@
 
 #include "ns3/header.h"
 #include "ns3/nstime.h"
+#include "ns3/applications-module.h"
 
 namespace ns3 {
 
@@ -58,6 +59,8 @@ public:
   uint8_t GetVideoFrameType() const;
   int64_t GetArrivalTimeOffset() const;
   double GetReferenceDelta() const;
+  static uint32_t GetStaticSize (void);
+  bool IsHeaderSizeValid(Ptr<Packet> packet) const;
 
 private:
   uint32_t m_seq;                  // Sequence number

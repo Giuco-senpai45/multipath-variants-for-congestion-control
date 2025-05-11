@@ -123,6 +123,14 @@ class NadaCongestionControl : public Object
         return Seconds(m_baseDelay);
     }
 
+    /**
+     * \brief Update with video frame information for better rate adaptation
+     * \param frameSize Size of the current video frame
+     * \param isKeyFrame Whether this is a key frame
+     * \param frameInterval Time between frames
+     */
+    void UpdateVideoFrameInfo(uint32_t frameSize, bool isKeyFrame, Time frameInterval);
+
   private:
     /**
      * \brief Periodic update function called on a timer

@@ -1,9 +1,5 @@
 /*
- * NS-3 Simulation with NADA Congestion Control Algorithm for WebRTC
- * Topology: Source Router -> Intermediate Router (with additional sources) -> Destination Router
- * Using UDP transport with NADA congestion control with WebRTC video frame patterns
- *
- *
+
                                                 +-----------------+
                                                 | Destination     |
                                                 | Router          |
@@ -25,12 +21,12 @@
                                                                           ▲
                                                                           |
                                                                           |
-                                                                  +----------------+
-                                                                  |                |
-                                                                  | Competing      |
-                                                                  | Sources (1-5)  |
-                                                                  |                |
-                                                                  +----------------+
+                                                                  +--------------------+
+                                                                  |                    |
+                                                                  | Competing          |
+                                                                  | Sources TCP (1-5)  |
+                                                                  |                    |
+                                                                  +--------------------+
                                                                           |
                                                                           |
                                                                           |
@@ -81,59 +77,44 @@ class CongestionTracker
 
     DataRate UpdateRate(DataRate currentRate, double lossRate, Time rtt)
     {
-        // Keep track of packets
-        m_totalSent++;
+        // Track congestion state
+        m_lastRtt = rtt;
+        m_totalSent += 10; // Increment counter with each update
+
         if (lossRate > 0.01)
         {
-            m_totalLost++;
+            m_totalLost += static_cast<uint32_t>(lossRate * 10);
+            m_congested = true;
         }
-
-        // Store RTT for trends
-        if (rtt.IsPositive())
-        {
-            m_lastRtt = rtt;
-        }
-
-        // Detect congestion
-        bool wasCongested = m_congested;
-        m_congested = (m_totalSent > 30 && (double)m_totalLost / m_totalSent > 0.05) ||
-                      (rtt > Seconds(0.2)) || (lossRate > 0.1);
 
         DataRate newRate = currentRate;
 
-        if (lossRate > 0.2)
+        // Very conservative rate adjustments
+        if (lossRate > 0.05 || rtt > Seconds(0.2))
         {
-            // Severe congestion - drastic reduction
+            // Heavy congestion - reduce rate significantly
             newRate = DataRate(currentRate.GetBitRate() * 0.5);
-            NS_LOG_INFO("Severe congestion! Drastically reducing rate to " << newRate);
-            m_totalSent = 0;
-            m_totalLost = 0;
+            m_congested = true;
         }
-        else if (m_congested && !wasCongested)
+        else if (lossRate > 0.01)
         {
-            // Sharp reduction on congestion onset
-            newRate = DataRate(currentRate.GetBitRate() * 0.7);
-            NS_LOG_INFO("Congestion detected! Reducing rate to " << newRate);
-            m_totalSent = 0;
-            m_totalLost = 0;
-        }
-        else if (m_congested)
-        {
-            // Continue reducing if still congested - MORE aggressive reduction
-            newRate = DataRate(currentRate.GetBitRate() * 0.9);
+            // Moderate congestion - reduce rate
+            newRate = DataRate(currentRate.GetBitRate() * 0.8);
+            m_congested = true;
         }
         else if (m_totalSent > 100 && (double)m_totalLost / m_totalSent < 0.01)
         {
-            // Slow increase when conditions are good - MORE conservative increase
-            newRate = DataRate(currentRate.GetBitRate() * 1.02);
+            // Very conservative increase
+            newRate = DataRate(currentRate.GetBitRate() * 1.01);
             m_totalSent = 0;
             m_totalLost = 0;
+            m_congested = false;
         }
 
-        // LOWER cap on rate to avoid overwhelming the network
-        if (newRate > DataRate("3Mbps"))
+        // Lower cap on rate
+        if (newRate > DataRate("1.5Mbps"))
         {
-            newRate = DataRate("3Mbps");
+            newRate = DataRate("1.5Mbps");
         }
 
         m_lastRate = newRate;
@@ -154,6 +135,7 @@ class CongestionTracker
 };
 
 // Function to send WebRTC video frames with improved pacing
+// Replace the SendVideoFrame function with this improved implementation
 void
 SendVideoFrame(Ptr<UdpNadaClient> client,
                uint32_t& frameCount,
@@ -161,37 +143,60 @@ SendVideoFrame(Ptr<UdpNadaClient> client,
                uint32_t frameSize,
                EventId& frameEvent,
                Time frameInterval,
-               CongestionTracker& congestion)
+               CongestionTracker& congestion,
+               uint32_t& totalPacketsSent,
+               uint32_t maxPackets)
 {
-    if (!client)
+    if (!client || totalPacketsSent >= maxPackets)
     {
+        // Stop sending if client is null or max packets reached
+        NS_LOG_INFO("Stopping video frame sending");
         return;
+    }
+
+    if (totalPacketsSent >= maxPackets && frameEvent.IsPending())
+    {
+        Simulator::Cancel(frameEvent);
     }
 
     // Determine frame type (key frame or delta frame)
     bool isKeyFrame = (frameCount % keyFrameInterval == 0);
     VideoFrameType frameType = isKeyFrame ? KEY_FRAME : DELTA_FRAME;
 
-    // More realistic frame sizes - key frames are larger but not excessive
-    uint32_t currentFrameSize = isKeyFrame ? frameSize * 2.5 : frameSize;
-
-    // Get the NADA congestion control object
-    Ptr<NadaCongestionControl> nadaCC = client->GetNode()->GetObject<NadaCongestionControl>();
+    // Smaller frame sizes
+    uint32_t currentFrameSize = isKeyFrame ? frameSize * 1.5 : frameSize;
 
     // Get current network conditions
-    DataRate nadaRate = nadaCC ? nadaCC->GetCurrentRate() : DataRate("1Mbps");
+    Ptr<NadaCongestionControl> nadaCC = client->GetNode()->GetObject<NadaCongestionControl>();
+
+    // Get current network conditions with fallback values
+    DataRate nadaRate = nadaCC ? nadaCC->GetCurrentRate() : DataRate("500kbps");
     double lossRate = nadaCC ? nadaCC->GetLossRate() : 0;
     Time rtt = nadaCC ? nadaCC->GetBaseDelay() * 2 : Seconds(0.050);
 
-    // Apply additional rate control based on observed congestion
+    // Apply rate control - limit the data more aggressively
     DataRate sendRate = congestion.UpdateRate(nadaRate, lossRate, rtt);
 
-    // If we're in congestion, reduce frame quality
-    if (congestion.IsCongested())
+    // Calculate how many bytes we should send per second at current rate
+    double bytesPerSecond = sendRate.GetBitRate() / 8.0;
+
+    // Calculate how many bytes we should send per frame interval
+    double targetBytesPerFrame = bytesPerSecond / (1.0 / frameInterval.GetSeconds());
+
+    // Hard cap on frame size - be more restrictive
+    if (currentFrameSize > targetBytesPerFrame * 0.8)
     {
-        // More significant reduction during congestion
-        currentFrameSize = isKeyFrame ? frameSize * 1.2 : frameSize * 0.7;
-        NS_LOG_INFO("Reducing frame size due to congestion to " << currentFrameSize << " bytes");
+        double reductionFactor = targetBytesPerFrame / currentFrameSize;
+        // Never reduce below 40% to maintain minimum quality
+        reductionFactor = std::max(0.4, reductionFactor * 0.8);
+        currentFrameSize = static_cast<uint32_t>(currentFrameSize * reductionFactor);
+    }
+
+    // Additional congestion-based reduction
+    if (congestion.IsCongested() || lossRate > 0.01)
+    {
+        double congestionFactor = isKeyFrame ? 0.6 : 0.5;
+        currentFrameSize = static_cast<uint32_t>(currentFrameSize * congestionFactor);
     }
 
     // Set frame parameters in client
@@ -208,24 +213,25 @@ SendVideoFrame(Ptr<UdpNadaClient> client,
     uint32_t remainingBytes = currentFrameSize;
     uint32_t numPackets = (currentFrameSize + mtu - 1) / mtu; // Ceiling division
 
+    // Log the number of packets to be generated
+    NS_LOG_INFO("Fragmenting frame into " << numPackets << " packets");
+
     // Calculate time to transmit frame with proper pacing
-    double frameTimeSeconds = std::max(0.002, currentFrameSize * 8.0 / sendRate.GetBitRate());
+    // Use a more conservative approach to avoid overwhelming the network
+    double frameTimeSeconds =
+        std::min(frameInterval.GetSeconds() * 0.8,              // Use at most 80% of frame interval
+                 currentFrameSize * 8.0 / sendRate.GetBitRate() // Theoretical time at current rate
+        );
 
-    // Ensure we don't exceed frame interval with transmission time
-    if (frameTimeSeconds > frameInterval.GetSeconds() * 0.8)
-    {
-        frameTimeSeconds = frameInterval.GetSeconds() * 0.8;
-        NS_LOG_INFO("Limiting frame transmission time to " << frameTimeSeconds << " seconds");
-    }
+    // Ensure minimum time to avoid bursts
+    frameTimeSeconds = std::max(0.005, frameTimeSeconds);
 
-    // If congested, spread packets more widely
-    if (congestion.IsCongested())
-    {
-        frameTimeSeconds = std::min(frameInterval.GetSeconds() * 0.9, frameTimeSeconds * 1.5);
-    }
-
-    double minPacketSpacing = numPackets > 10 ? 0.010 : 0.005;
+    // Calculate packet interval with minimum spacing constraint
+    double minPacketSpacing = 0.002; // 2ms minimum between packets
     double packetInterval = std::max(minPacketSpacing, frameTimeSeconds / numPackets);
+
+    NS_LOG_INFO("Frame transmission time: " << frameTimeSeconds << "s, packet interval: "
+                                            << packetInterval * 1000 << "ms");
 
     // Store original packet size
     Ptr<UdpNadaClient> nadaClient = DynamicCast<UdpNadaClient>(client);
@@ -234,24 +240,33 @@ SendVideoFrame(Ptr<UdpNadaClient> client,
     nadaClient->GetAttribute("PacketSize", val);
     originalSize = val.Get();
 
+    uint32_t packetsToSend = std::min(numPackets, maxPackets - totalPacketsSent);
     // Send packets with improved pacing
-    for (uint32_t i = 0; i < numPackets; i++)
+    for (uint32_t i = 0; i < packetsToSend; i++)
     {
         uint32_t packetSize = std::min(mtu, remainingBytes);
         nadaClient->SetAttribute("PacketSize", UintegerValue(packetSize));
 
-        // Always maintain a minimum spacing between packets (at least 2ms)
-        // and add jitter to simulate real networks
+        // Add jitter to packet timing for realism
         double jitteredInterval = AddJitter(packetInterval, 0.05);
         Time sendTime = Seconds(std::max(i * jitteredInterval, i * minPacketSpacing));
 
         if (i == 0)
         {
             nadaClient->Send();
+            totalPacketsSent++;
         }
         else
         {
-            Simulator::Schedule(sendTime, &UdpNadaClient::Send, nadaClient);
+            uint32_t* pCounter = &totalPacketsSent;
+            Simulator::Schedule(sendTime, [nadaClient, pCounter, maxPackets](void) {
+                if (*pCounter >= maxPackets)
+                {
+                    return;
+                }
+                nadaClient->Send();
+                (*pCounter)++;
+            });
         }
         remainingBytes -= packetSize;
     }
@@ -262,17 +277,30 @@ SendVideoFrame(Ptr<UdpNadaClient> client,
     // Increment frame counter
     frameCount++;
 
-    // Schedule next frame with a slight jitter to avoid synchronization
+    // Update NADA with current frame information
+    if (nadaCC)
+    {
+        // Pass frame information to NADA for better rate adaptation
+        nadaCC->UpdateVideoFrameInfo(currentFrameSize, isKeyFrame, frameInterval);
+    }
+
+    // Schedule next frame with appropriate timing
+    // Ensure we don't schedule faster than the configured frame rate
     Time jitteredFrameInterval = Seconds(AddJitter(frameInterval.GetSeconds(), 0.05));
-    frameEvent = Simulator::Schedule(jitteredFrameInterval,
-                                     &SendVideoFrame,
-                                     client,
-                                     frameCount,
-                                     keyFrameInterval,
-                                     frameSize,
-                                     frameEvent,
-                                     frameInterval,
-                                     std::ref(congestion));
+    if (totalPacketsSent < maxPackets)
+    {
+        frameEvent = Simulator::Schedule(jitteredFrameInterval,
+                                         &SendVideoFrame,
+                                         client,
+                                         frameCount,
+                                         keyFrameInterval,
+                                         frameSize,
+                                         frameEvent,
+                                         frameInterval,
+                                         std::ref(congestion),
+                                         std::ref(totalPacketsSent),
+                                         maxPackets);
+    }
 }
 
 int
@@ -282,15 +310,24 @@ main(int argc, char* argv[])
     std::string dataRate = "1024Mbps";    // Higher access link capacity
     std::string bottleneckBw = "500Mbps"; // Typical home internet upload
     uint32_t delayMs = 25;                // Reduced base delay
-    uint32_t simulationTime = 60;         // Simulation time in seconds
-    uint32_t numCompetingSources = 2;     // Fewer competing sources
-    bool enableWebRTC = true;             // Enable WebRTC by default
-    uint32_t keyFrameInterval = 100;      // Less frequent key frames
-    uint32_t frameRate = 15;              // More typical frame rate
-    bool logNada = false;                 // Enable detailed NADA logging
-    uint32_t queueSize = 200;             // Queue size in packets
-    std::string queueDisc = "CoDel";      // Queue discipline (CoDel, PfifoFast, PIE)
+
+    // Original multipath parameters for comaptibility
+    std::string dataRate1 = "1024kbps";
+    std::string dataRate2 = "500kbps";
+    uint32_t delayMs1 = 20;
+    uint32_t delayMs2 = 40;
+    uint32_t pathSelectionStrategy = 0;
+
+    uint32_t simulationTime = 60;     // Simulation time in seconds
+    uint32_t numCompetingSources = 2; // Fewer competing sources
+    bool enableWebRTC = true;         // Enable WebRTC by default
+    uint32_t keyFrameInterval = 100;  // Less frequent key frames
+    uint32_t frameRate = 15;          // More typical frame rate
+    bool logNada = false;             // Enable detailed NADA logging
+    uint32_t queueSize = 200;         // Queue size in packets
+    std::string queueDisc = "CoDel";  // Queue discipline (CoDel, PfifoFast, PIE)
     bool enableAqm = false;
+    uint32_t maxTotalPackets = 10000; // Default target packet count
 
     // Parse command line arguments
     CommandLine cmd;
@@ -298,6 +335,13 @@ main(int argc, char* argv[])
     cmd.AddValue("dataRate", "Data rate of primary source", dataRate);
     cmd.AddValue("bottleneckBw", "Bottleneck link bandwidth", bottleneckBw);
     cmd.AddValue("delayMs", "Link delay in milliseconds", delayMs);
+
+    cmd.AddValue("dataRate1", "Data rate of first path (ignored)", dataRate1);
+    cmd.AddValue("dataRate2", "Data rate of second path (ignored)", dataRate2);
+    cmd.AddValue("delayMs1", "Link delay of first path in milliseconds (ignored)", delayMs1);
+    cmd.AddValue("delayMs2", "Link delay of second path in milliseconds (ignored)", delayMs2);
+    cmd.AddValue("pathSelection", "Path selection strategy (ignored)", pathSelectionStrategy);
+
     cmd.AddValue("simulationTime", "Simulation time in seconds", simulationTime);
     cmd.AddValue("numCompetingSources", "Number of competing traffic sources", numCompetingSources);
     cmd.AddValue("webrtc", "Enable WebRTC-like traffic pattern", enableWebRTC);
@@ -307,7 +351,18 @@ main(int argc, char* argv[])
     cmd.AddValue("queueSize", "Queue size in packets", queueSize);
     cmd.AddValue("queueDisc", "Queue discipline (CoDel, PfifoFast, PIE)", queueDisc);
     cmd.AddValue("enableAqm", "Enable Active Queue Management", enableAqm);
+    cmd.AddValue("maxPackets",
+                 "Maximum total packets to send across the simulation",
+                 maxTotalPackets);
     cmd.Parse(argc, argv);
+
+    if (dataRate1 != "1024kbps" || dataRate2 != "500kbps" || delayMs1 != 20 || delayMs2 != 40 ||
+        pathSelectionStrategy != 0)
+    {
+        NS_LOG_WARN("Note: Path-specific parameters (dataRate1, dataRate2, delayMs1, delayMs2, "
+                    "pathSelection) "
+                    "are ignored in single-path simulation");
+    }
 
     // Configure output
     Time::SetResolution(Time::NS);
@@ -328,6 +383,12 @@ main(int argc, char* argv[])
                        StringValue("ns3::DropTailQueue<Packet>"));
     Config::SetDefault("ns3::DropTailQueue<Packet>::MaxSize",
                        QueueSizeValue(QueueSize(std::to_string(queueSize) + "p")));
+
+    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::TcpNewReno"));
+    Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(packetSize));
+    Config::SetDefault("ns3::TcpSocketBase::WindowScaling", BooleanValue(true));
+    Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(1 << 20));
+    Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(1 << 20));
 
     // Create nodes
     NodeContainer sourceRouter;
@@ -429,7 +490,6 @@ main(int argc, char* argv[])
     internet.Install(destinationRouter);
     internet.Install(additionalSources);
 
-
     // Configure IP addresses
     Ipv4AddressHelper ipv4;
 
@@ -467,7 +527,7 @@ main(int argc, char* argv[])
 
     UdpNadaClientHelper client(destAddr);
     client.SetAttribute("PacketSize", UintegerValue(packetSize));
-    client.SetAttribute("MaxPackets", UintegerValue(0)); // Unlimited
+    client.SetAttribute("MaxPackets", UintegerValue(maxTotalPackets)); // Unlimited
 
     // Configure NADA parameters for WebRTC behavior
     if (enableWebRTC)
@@ -479,12 +539,12 @@ main(int argc, char* argv[])
             nadaCC->SetVideoMode(true);
 
             // Configure more realistic NADA parameters
-            nadaCC->SetMinRate(DataRate("300kbps")); // Minimum usable video rate
-            nadaCC->SetMaxRate(DataRate("3Mbps"));   // Maximum rate (avoid overwhelming)
+            nadaCC->SetMinRate(DataRate("100kbps")); // Minimum usable video rate
+            nadaCC->SetMaxRate(DataRate("1Mbps"));   // Maximum rate (avoid overwhelming)
             nadaCC->SetRttMax(MilliSeconds(200));    // Maximum RTT to consider
 
             // Make NADA more responsive to congestion
-            nadaCC->SetXRef(DataRate("2Mbps"));
+            nadaCC->SetXRef(DataRate("500kbps"));
 
             NS_LOG_INFO("Video mode enabled in NADA congestion control with optimized parameters");
         }
@@ -513,6 +573,8 @@ main(int argc, char* argv[])
             Time frameInterval = Seconds(1.0 / frameRate);
 
             // Create event to send first frame after a brief startup delay
+            uint32_t totalPacketsSent = 0;
+
             EventId frameEvent;
             frameEvent = Simulator::Schedule(Seconds(1.5),
                                              &SendVideoFrame,
@@ -522,27 +584,45 @@ main(int argc, char* argv[])
                                              packetSize,
                                              frameEvent,
                                              frameInterval,
-                                             std::ref(congestionTracker));
+                                             std::ref(congestionTracker),
+                                             std::ref(totalPacketsSent),
+                                             maxTotalPackets);
 
             NS_LOG_INFO("WebRTC traffic generator started - Frame rate: "
                         << frameRate << ", Key frame interval: " << keyFrameInterval);
         }
     }
 
-    // Create additional traffic sources with more reasonable behavior patterns
-    UdpClientHelper additionalClient(bottleneckIfaces.GetAddress(1), port);
-    additionalClient.SetAttribute("PacketSize", UintegerValue(packetSize));
-    additionalClient.SetAttribute("MaxPackets", UintegerValue(0));
+    // Create TCP sink applications at destination for competing TCP traffic
+    uint16_t tcpPort = 50000;
+    PacketSinkHelper sinkHelper("ns3::TcpSocketFactory",
+                                InetSocketAddress(Ipv4Address::GetAny(), tcpPort));
+    ApplicationContainer sinkApps = sinkHelper.Install(destinationRouter.Get(0));
+    sinkApps.Start(Seconds(0.5));
+    sinkApps.Stop(Seconds(simulationTime));
 
-    ApplicationContainer additionalApps[numCompetingSources];
+    // Create competing TCP bulk send applications instead of UDP clients
+    ApplicationContainer competingApps[numCompetingSources];
     for (uint32_t i = 0; i < numCompetingSources; i++)
     {
-        // More reasonable intervals for different rates (less aggressive)
-        double interval = 0.008 * (1 + i); // Less aggressive rates
-        additionalClient.SetAttribute("Interval", TimeValue(Seconds(interval)));
-        additionalApps[i] = additionalClient.Install(additionalSources.Get(i));
-        additionalApps[i].Start(Seconds(15.0 + i * 8));          // Start later and more staggered
-        additionalApps[i].Stop(Seconds(simulationTime - 5 - i)); // Stop earlier
+        // Configure TCP bulk send application
+        BulkSendHelper source("ns3::TcpSocketFactory",
+                              InetSocketAddress(bottleneckIfaces.GetAddress(1), tcpPort));
+
+        // Configure sending behavior
+        source.SetAttribute("MaxBytes", UintegerValue(0)); // Unlimited
+        source.SetAttribute("SendSize", UintegerValue(packetSize));
+
+        // Install on competing sources
+        competingApps[i] = source.Install(additionalSources.Get(i));
+
+        // Start and stop times (staggered like the original)
+        competingApps[i].Start(Seconds(15.0 + i * 8)); // merge si mai putin 2
+        competingApps[i].Stop(Seconds(simulationTime - 5 - i));
+
+        NS_LOG_INFO("TCP competing source " << i << " starts at " << (15.0 + i * 8)
+                                            << "s and stops at " << (simulationTime - 5 - i)
+                                            << "s");
     }
 
     // Create UDP receiver at destination
@@ -585,6 +665,16 @@ main(int argc, char* argv[])
     uint64_t totalTxBytes = 0;
     uint64_t totalRxBytes = 0;
 
+    uint32_t nadaTxPackets = 0;
+    uint32_t nadaRxPackets = 0;
+    uint64_t nadaTxBytes = 0;
+    uint64_t nadaRxBytes = 0;
+
+    uint32_t tcpTxPackets = 0;
+    uint32_t tcpRxPackets = 0;
+    uint64_t tcpTxBytes = 0;
+    uint64_t tcpRxBytes = 0;
+
     for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator i = stats.begin();
          i != stats.end();
          ++i)
@@ -593,6 +683,15 @@ main(int argc, char* argv[])
 
         // Check if this is the NADA flow (from source router)
         bool isNadaFlow = (t.sourceAddress == sourceRouterIfaces.GetAddress(0));
+
+        bool isAck = (t.sourceAddress == bottleneckIfaces.GetAddress(1) ||
+                      (t.protocol == 6 && t.sourcePort == tcpPort)); // TCP protocol and server port
+
+        // Skip ACK flows
+        if (isAck)
+        {
+            continue;
+        }
 
         std::cout << "Flow " << i->first << " (" << t.sourceAddress << " -> "
                   << t.destinationAddress << ")" << (isNadaFlow && enableWebRTC ? " [WebRTC]" : "")
@@ -603,10 +702,25 @@ main(int argc, char* argv[])
         std::cout << "  Tx Bytes: " << i->second.txBytes << "\n";
         std::cout << "  Rx Bytes: " << i->second.rxBytes << "\n";
 
+        // Track overall statistics
         totalTxPackets += i->second.txPackets;
         totalRxPackets += i->second.rxPackets;
         totalTxBytes += i->second.txBytes;
         totalRxBytes += i->second.rxBytes;
+
+        // Track per-protocol statistics
+        if (isNadaFlow) {
+            nadaTxPackets += i->second.txPackets;
+            nadaRxPackets += i->second.rxPackets;
+            nadaTxBytes += i->second.txBytes;
+            nadaRxBytes += i->second.rxBytes;
+        } else {
+            // Must be TCP competing flow
+            tcpTxPackets += i->second.txPackets;
+            tcpRxPackets += i->second.rxPackets;
+            tcpTxBytes += i->second.txBytes;
+            tcpRxBytes += i->second.rxBytes;
+        }
 
         double duration =
             i->second.timeLastRxPacket.GetSeconds() - i->second.timeFirstTxPacket.GetSeconds();
@@ -649,7 +763,6 @@ main(int argc, char* argv[])
         std::cout << "\n";
     }
 
-    // Print summary statistics
     std::cout << "=== OVERALL STATISTICS ===\n";
     std::cout << "Total Tx Packets: " << totalTxPackets << "\n";
     std::cout << "Total Rx Packets: " << totalRxPackets << "\n";
@@ -658,6 +771,35 @@ main(int argc, char* argv[])
     std::cout << "Total Tx Bytes: " << totalTxBytes << "\n";
     std::cout << "Total Rx Bytes: " << totalRxBytes << "\n";
     std::cout << "Average network efficiency: " << 100.0 * totalRxBytes / totalTxBytes << "%\n\n";
+
+    // Print NADA/WebRTC specific statistics
+    std::cout << "=== NADA/WebRTC STATISTICS ===\n";
+    std::cout << "NADA Tx Packets: " << nadaTxPackets << "\n";
+    std::cout << "NADA Rx Packets: " << nadaRxPackets << "\n";
+    if (nadaTxPackets > 0) {
+        std::cout << "NADA packet loss: "
+                << 100.0 * (nadaTxPackets - nadaRxPackets) / nadaTxPackets << "%\n";
+    }
+    std::cout << "NADA Tx Bytes: " << nadaTxBytes << "\n";
+    std::cout << "NADA Rx Bytes: " << nadaRxBytes << "\n";
+    if (nadaTxBytes > 0) {
+        std::cout << "NADA efficiency: " << 100.0 * nadaRxBytes / nadaTxBytes << "%\n";
+    }
+
+    // Print TCP specific statistics
+    std::cout << "\n=== TCP COMPETING FLOWS STATISTICS ===\n";
+    std::cout << "TCP Tx Packets: " << tcpTxPackets << "\n";
+    std::cout << "TCP Rx Packets: " << tcpRxPackets << "\n";
+    if (tcpTxPackets > 0) {
+        std::cout << "TCP packet loss: "
+                << 100.0 * (tcpTxPackets - tcpRxPackets) / tcpTxPackets << "%\n";
+    }
+    std::cout << "TCP Tx Bytes: " << tcpTxBytes << "\n";
+    std::cout << "TCP Rx Bytes: " << tcpRxBytes << "\n";
+    if (tcpTxBytes > 0) {
+        std::cout << "TCP efficiency: " << 100.0 * tcpRxBytes / tcpTxBytes << "%\n";
+    }
+    std::cout << "\n";
 
     Simulator::Destroy();
     return 0;

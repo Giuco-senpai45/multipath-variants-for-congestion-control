@@ -328,6 +328,34 @@ UdpNadaClient::Send(void)
 }
 
 void
+UdpNadaClient::SetSocket(Ptr<Socket> socket)
+{
+    NS_LOG_FUNCTION(this << socket);
+
+    // Clean up existing socket if any
+    if (m_socket)
+    {
+        m_socket->SetRecvCallback(MakeNullCallback<void, Ptr<Socket>>());
+    }
+
+    m_socket = socket;
+
+    if (m_socket)
+    {
+        // Set up receive callback on the new socket
+        m_socket->SetRecvCallback(MakeCallback(&UdpNadaClient::HandleRead, this));
+
+        // Re-initialize NADA if needed
+        if (m_nada)
+        {
+            m_nada->Init(m_socket);
+        }
+
+        NS_LOG_INFO("Socket manually set for UdpNadaClient");
+    }
+}
+
+void
 UdpNadaClient::HandleRead(Ptr<Socket> socket)
 {
     NS_LOG_FUNCTION(this << socket);
@@ -337,6 +365,13 @@ UdpNadaClient::HandleRead(Ptr<Socket> socket)
 
     while ((packet = socket->RecvFrom(from)))
     {
+        if (packet->GetSize() < NadaHeader::GetStaticSize())
+        {
+            NS_LOG_WARN("Received packet too small (size: " << packet->GetSize()
+                                                           << ") to contain a NadaHeader. Discarding.");
+            continue; // Skip this packet
+        }
+
         // Extract header with all feedback information
         NadaHeader header;
         if (packet->RemoveHeader(header))

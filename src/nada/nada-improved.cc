@@ -130,6 +130,7 @@ NadaCongestionControl::ProcessLoss(double lossRate)
     }
 }
 
+// In NadaCongestionControl::UpdateRate() function
 DataRate
 NadaCongestionControl::UpdateRate()
 {
@@ -144,39 +145,37 @@ NadaCongestionControl::UpdateRate()
 
     double newRate = m_currentRate;
 
-    // NADA rate update algorithm per RFC 8698 Section 4.3
+    // Make NADA less aggressive
     if (score < 0.1)
     {
-        // Accelerated ramp-up: Multiplicative increase
-        double rampUpFactor = 1.0 + m_delta * (0.1 - score) * deltaT;
+        // Reduce the ramp-up factor to be less aggressive
+        double rampUpFactor = 1.0 + (m_delta * 0.5) * (0.1 - score) * deltaT;
         newRate = m_currentRate * rampUpFactor;
     }
     else if (score < 0.5)
     {
-        // Gradual update: Additive increase and multiplicative decrease combined
-        double gradientFactor = 1.0 - m_beta * (score - 0.1) * deltaT;
-        newRate = m_currentRate * gradientFactor + m_gamma * m_maxRate * deltaT;
+        // More conservative for light congestion
+        double gradientFactor = 1.0 - (m_beta * 1.5) * (score - 0.1) * deltaT;
+        newRate = m_currentRate * gradientFactor + m_alpha * deltaT;
     }
     else
     {
-        // Multiplicative decrease
-        double decreaseFactor = 1.0 - 1.5 * m_beta * (score - 0.5) * deltaT;
-        newRate = m_currentRate * decreaseFactor;
+        // More aggressive reduction for heavy congestion
+        double reductionFactor = 1.0 - (m_beta * 2) * (score - 0.1) * deltaT;
+        newRate = m_currentRate * reductionFactor;
     }
 
-    // Enforce min/max bounds
-    newRate = std::max(m_minRate, std::min(m_maxRate, newRate));
-
-    // Apply video-specific adaptations if video mode is enabled
-    if (m_videoMode) {
-        newRate = ApplyVideoAdaptation(newRate);
+    // Impose tighter bounds
+    if (newRate > m_maxRate)
+    {
+        newRate = m_maxRate;
+    }
+    else if (newRate < m_minRate)
+    {
+        newRate = m_minRate;
     }
 
-    NS_LOG_INFO("NADA rate update: " << m_currentRate << " -> " << newRate
-                                     << " bps (score: " << score << ", delay: " << m_currentDelay
-                                     << ", loss: " << m_lossRate
-                                     << (m_videoMode ? ", video mode" : "") << ")");
-
+    // Set current rate
     m_currentRate = newRate;
     return DataRate(m_currentRate);
 }
@@ -414,7 +413,7 @@ NadaCongestionControl::SetVideoMode(bool enable)
         // to use the video rate adaptation logic
 
         // Cancel any pending update event to restart with new timing
-        if (m_updateEvent.IsRunning()) {
+        if (m_updateEvent.IsPending()) {
             Simulator::Cancel(m_updateEvent);
         }
 
@@ -429,7 +428,50 @@ NadaCongestionControl::SetVideoMode(bool enable)
     }
 }
 
-// Add these implementations after other member functions
+void
+NadaCongestionControl::UpdateVideoFrameInfo(uint32_t frameSize, bool isKeyFrame, Time frameInterval)
+{
+    NS_LOG_FUNCTION(this << frameSize << isKeyFrame << frameInterval);
+
+    // Store frame information
+    m_frameSize = frameSize;
+
+    if (isKeyFrame) {
+        m_lastKeyFrameTime = Simulator::Now().GetSeconds();
+    }
+
+    // Calculate target bitrate based on frame rate and size
+    double frameRate = 1.0 / frameInterval.GetSeconds();
+    double targetBitrate = frameSize * 8 * frameRate;
+
+    // Adjust rate change speed based on how far we are from target
+    if (m_videoMode) {
+        double currentBitrate = m_currentRate;
+        double ratio = currentBitrate / targetBitrate;
+
+        // If our current rate is way off from what's needed for the video,
+        // we can adjust more aggressively in the next rate update
+        if (ratio < 0.8 || ratio > 1.2) {
+            NS_LOG_INFO("Video bitrate mismatch - current: " << currentBitrate
+                        << ", target for video: " << targetBitrate
+                        << ", ratio: " << ratio);
+
+            // Don't change rate here, but let UpdateRate know about the mismatch
+            // by adjusting the parameters used in rate calculation
+            if (ratio < 0.8) {
+                // We're sending too little - increase ramp up speed temporarily
+                m_delta *= 1.2;  // Temporary boost to delta
+            } else if (ratio > 1.2) {
+                // We're sending too much - decrease more aggressively temporarily
+                m_beta *= 1.1;   // Temporary boost to beta
+            }
+        } else {
+            // Reset to normal parameters
+            m_delta = 0.05;  // Default delta
+            m_beta = 0.5;   // Default beta
+        }
+    }
+}
 
 void
 NadaCongestionControl::SetMinRate(DataRate rate)

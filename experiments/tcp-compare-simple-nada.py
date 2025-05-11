@@ -8,7 +8,7 @@ import numpy as np
 import seaborn as sns
 
 # Configuration
-OUTPUT_DIR = "results/comparison"
+OUTPUT_DIR = "results/tcp-simple-nadas"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Define different scenarios to compare
@@ -75,7 +75,7 @@ SIMULATION_SCENARIOS = [
             "bottleneckBw": "10Mbps",
             "delayMs": 100,
             "frameRate": 30,
-            "numCompetingSources": 5  # Many competing flows
+            "numCompetingSources": 5
         }
     },
     # Modern network scenarios (2025)
@@ -213,6 +213,7 @@ def parse_output(output):
     nada_loss_re = re.compile(r"(NADA|WebRTC) packet loss: ([0-9.]+)%")
     nada_efficiency_re = re.compile(r"(NADA|WebRTC) efficiency: ([0-9.]+)%")
 
+
     # Regular expressions for TCP specific statistics
     tcp_tx_packets_re = re.compile(r"TCP Tx Packets: ([0-9]+)")
     tcp_rx_packets_re = re.compile(r"TCP Rx Packets: ([0-9]+)")
@@ -280,32 +281,32 @@ def parse_output(output):
         # NADA statistics
         nada_tx_packets_match = nada_tx_packets_re.search(line)
         if nada_tx_packets_match:
-            stats['nada_tx_packets'] = int(nada_tx_packets_match.group(1))
+            stats['nada_tx_packets'] = int(nada_tx_packets_match.group(2))
             continue
 
         nada_rx_packets_match = nada_rx_packets_re.search(line)
         if nada_rx_packets_match:
-            stats['nada_rx_packets'] = int(nada_rx_packets_match.group(1))
+            stats['nada_rx_packets'] = int(nada_rx_packets_match.group(2))
             continue
 
         nada_tx_bytes_match = nada_tx_bytes_re.search(line)
         if nada_tx_bytes_match:
-            stats['nada_tx_bytes'] = int(nada_tx_bytes_match.group(1))
+            stats['nada_tx_bytes'] = int(nada_tx_bytes_match.group(2))
             continue
 
         nada_rx_bytes_match = nada_rx_bytes_re.search(line)
         if nada_rx_bytes_match:
-            stats['nada_rx_bytes'] = int(nada_rx_bytes_match.group(1))
+            stats['nada_rx_bytes'] = int(nada_rx_bytes_match.group(2))
             continue
 
         nada_loss_match = nada_loss_re.search(line)
         if nada_loss_match:
-            stats['nada_loss'] = float(nada_loss_match.group(1))
+            stats['nada_loss'] = float(nada_loss_match.group(2))
             continue
 
         nada_efficiency_match = nada_efficiency_re.search(line)
         if nada_efficiency_match:
-            stats['nada_efficiency'] = float(nada_efficiency_match.group(1))
+            stats['nada_efficiency'] = float(nada_efficiency_match.group(2))
             continue
 
         # TCP statistics
@@ -483,7 +484,6 @@ def analyze_results(nada_stats, basic_stats):
     print(comparison_df)
     return comparison_df
 
-# Function to generate visualizations for a single scenario
 def generate_visualizations(comparison_df, scenario_name):
     """Generate visualizations from the comparison DataFrame."""
     if comparison_df.empty:
@@ -501,8 +501,9 @@ def generate_visualizations(comparison_df, scenario_name):
     plt.subplot(2, 1, 1)
     metrics_to_plot = comparison_df[comparison_df['Metric'] != 'Estimated MOS (1-5)']
 
+    # Use the actual column names from the DataFrame ('NADA' and 'Basic') instead of 'TCP-NADA' and 'TCP-Basic'
     ax = metrics_to_plot.set_index('Metric')[['NADA', 'Basic']].plot(kind='bar', ax=plt.gca())
-    plt.title(f'Comparison of NADA vs Basic WebRTC - {scenario_name} Scenario')
+    plt.title(f'Comparison of TCP with NADA vs TCP with Basic WebRTC - {scenario_name} Scenario')
     plt.ylabel('Value')
     plt.xticks(rotation=30)
     plt.grid(axis='y')
@@ -514,6 +515,7 @@ def generate_visualizations(comparison_df, scenario_name):
     # Second subplot just for MOS
     plt.subplot(2, 1, 2)
     mos_data = comparison_df[comparison_df['Metric'] == 'Estimated MOS (1-5)']
+    # Use the actual column names from the DataFrame
     ax2 = mos_data.set_index('Metric')[['NADA', 'Basic']].plot(kind='bar', ax=plt.gca(), color=['#1f77b4', '#ff7f0e'])
     plt.title(f'Video Quality Estimation (MOS) - {scenario_name} Scenario')
     plt.ylabel('Estimated MOS (1-5)')
@@ -533,7 +535,7 @@ def generate_visualizations(comparison_df, scenario_name):
     improvement_data = comparison_df.dropna(subset=['Improvement (%)'])
 
     ax3 = improvement_data.set_index('Metric')['Improvement (%)'].plot(kind='bar', color='green')
-    plt.title(f'Performance Improvement of NADA over Basic WebRTC (%) - {scenario_name} Scenario')
+    plt.title(f'Performance Improvement of TCP-NADA over TCP-Basic WebRTC (%) - {scenario_name} Scenario')
     plt.ylabel('Improvement (%)')
     plt.xticks(rotation=30)
     plt.grid(axis='y')
@@ -561,15 +563,15 @@ def generate_summary_visualizations(all_results):
     for scenario_name, comparison_df in all_results.items():
         for _, row in comparison_df.iterrows():
             metric = row['Metric']
-            nada_value = row['NADA']
-            basic_value = row['Basic']
+            nada_value = row['NADA']  # Use 'NADA' instead of 'TCP-NADA'
+            basic_value = row['Basic']  # Use 'Basic' instead of 'TCP-Basic'
             improvement = row['Improvement (%)']
 
             summary_data.append({
                 'Scenario': scenario_name,
                 'Metric': metric,
-                'NADA': nada_value,
-                'Basic': basic_value,
+                'TCP-NADA': nada_value,  # Keep output column names as desired
+                'TCP-Basic': basic_value,
                 'Improvement (%)': improvement
             })
 
@@ -592,7 +594,7 @@ def generate_summary_visualizations(all_results):
     sns.heatmap(pivot_df, annot=True, fmt=".1f", cmap=cmap, center=0,
                 linewidths=.5, cbar_kws={"label": "Improvement %"}, mask=mask)
 
-    plt.title('NADA Improvement (%) Over Basic WebRTC Across Different Scenarios')
+    plt.title('TCP-NADA Improvement (%) Over TCP-Basic WebRTC Across Different Scenarios')
     plt.tight_layout()
     plt.savefig(f"{summary_folder}/improvement_heatmap_{timestamp}.png")
     plt.close()
@@ -609,8 +611,8 @@ def generate_summary_visualizations(all_results):
         width = 0.35
 
         # Create the grouped bars
-        rects1 = ax.bar(x - width/2, metric_data['NADA'].values, width, label='NADA')
-        rects2 = ax.bar(x + width/2, metric_data['Basic'].values, width, label='Basic WebRTC')
+        rects1 = ax.bar(x - width/2, metric_data['TCP-NADA'].values, width, label='TCP-NADA')
+        rects2 = ax.bar(x + width/2, metric_data['TCP-Basic'].values, width, label='TCP-Basic WebRTC')
 
         # Add labels and title
         ax.set_ylabel(metric)
@@ -639,19 +641,7 @@ def generate_summary_visualizations(all_results):
         plt.close(fig)
 
     # Create additional summary visualizations
-
-    # 1. Box plots of each metric across all scenarios
-    for metric in ['Improvement (%)']:
-        plt.figure(figsize=(14, 8))
-        metric_data = summary_df[['Scenario', 'Metric', metric]].pivot(index='Scenario', columns='Metric', values=metric)
-
-        sns.heatmap(metric_data, annot=True, fmt=".1f", cmap='RdYlGn', center=0)
-        plt.title(f'{metric} by Scenario and Metric')
-        plt.tight_layout()
-        plt.savefig(f"{summary_folder}/improvement_by_scenario_metric_{timestamp}.png")
-        plt.close()
-
-    # 2. Average improvement across all metrics by scenario
+    # Average improvement across all metrics by scenario
     plt.figure(figsize=(12, 6))
     avg_improvement = summary_df.groupby('Scenario')['Improvement (%)'].mean().sort_values()
 
@@ -670,22 +660,22 @@ def generate_summary_visualizations(all_results):
     plt.close()
 
 # Function to save raw simulation data
-def save_raw_data(scenario_name, nada_output, basic_output):
+def save_raw_data(scenario_name, tcp_nada_output, tcp_basic_output):
     """Save raw simulation output for reference"""
     scenario_folder = get_scenario_folder(scenario_name)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    if nada_output:
-        with open(f"{scenario_folder}/nada_raw_output_{timestamp}.txt", 'w') as f:
-            f.write(nada_output)
+    if tcp_nada_output:
+        with open(f"{scenario_folder}/tcp_nada_raw_output_{timestamp}.txt", 'w') as f:
+            f.write(tcp_nada_output)
 
-    if basic_output:
-        with open(f"{scenario_folder}/basic_raw_output_{timestamp}.txt", 'w') as f:
-            f.write(basic_output)
+    if tcp_basic_output:
+        with open(f"{scenario_folder}/tcp_basic_raw_output_{timestamp}.txt", 'w') as f:
+            f.write(tcp_basic_output)
 
-# Main function
+
 def main():
-    print("Starting comparison of NADA and Basic WebRTC simulations across multiple scenarios")
+    print("Starting comparison of TCP-NADA and TCP-Basic WebRTC simulations across multiple scenarios")
 
     # Create main output directory
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -702,23 +692,23 @@ def main():
         # Create scenario-specific folder
         scenario_folder = get_scenario_folder(scenario_name)
 
-        # Run NADA simulation
-        print("\nRunning NADA simulation...")
-        nada_output = run_simulation("scratch/simple-nada-webrtc", params)
+        # Run TCP-NADA simulation
+        print("\nRunning TCP-NADA simulation...")
+        tcp_nada_output = run_simulation("scratch/tcp-simple-nada-webrtc", params)
 
-        # Run basic WebRTC simulation
-        print("\nRunning basic WebRTC simulation...")
-        basic_output = run_simulation("scratch/simple-webrtc", params)
+        # Run TCP-Basic WebRTC simulation
+        print("\nRunning TCP-Basic WebRTC simulation...")
+        tcp_basic_output = run_simulation("scratch/tcp-simple-webrtc", params)
 
         # Save raw output
-        save_raw_data(scenario_name, nada_output, basic_output)
+        save_raw_data(scenario_name, tcp_nada_output, tcp_basic_output)
 
         # Parse outputs
-        nada_stats = parse_output(nada_output)
-        basic_stats = parse_output(basic_output)
+        tcp_nada_stats = parse_output(tcp_nada_output)
+        tcp_basic_stats = parse_output(tcp_basic_output)
 
         # Analyze results
-        comparison_df = analyze_results(nada_stats, basic_stats)
+        comparison_df = analyze_results(tcp_nada_stats, tcp_basic_stats)
 
         if not comparison_df.empty:
             # Store results for this scenario

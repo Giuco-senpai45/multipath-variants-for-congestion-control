@@ -98,6 +98,12 @@ class UdpNadaClient : public Application
     void SetOverheadFactor(double factor);
 
     /**
+     * \brief Set the socket directly (for manual socket creation)
+     * \param socket The socket to use
+     */
+    void SetSocket(Ptr<Socket> socket);
+
+    /**
      * \brief Clean up resources
      */
     virtual void DoDispose(void);

@@ -8,8 +8,8 @@
 #include "ns3/nada-improved.h"
 #include "ns3/nada-udp-client.h"
 #include "ns3/ptr.h"
-#include "ns3/traced-callback.h"
 #include "ns3/random-variable-stream.h"
+#include "ns3/traced-callback.h"
 
 #include <map>
 #include <vector>
@@ -26,6 +26,15 @@ namespace ns3
 class MultiPathNadaClient : public Application
 {
   public:
+    enum PathSelectionStrategy
+    {
+        WEIGHTED = 0,    // Default weighted distribution based on path quality
+        BEST_PATH = 1,   // Best path based on metrics
+        EQUAL = 2,       // Equal distribution (round-robin)
+        REDUNDANT = 3,   // Redundant transmission on all paths
+        FRAME_AWARE = 4, // Frame type aware (I-frames on best path)
+    };
+
     /**
      * \brief Get the type ID.
      * \return the object TypeId
@@ -135,8 +144,6 @@ class MultiPathNadaClient : public Application
      */
     void UpdatePathDistribution(void);
 
-    bool SendPacketOnPath(uint32_t pathId, Ptr<Packet> packet);
-
     /**
      * \brief Send packets on all paths
      */
@@ -155,18 +162,38 @@ class MultiPathNadaClient : public Application
      * \param socket The socket that received the packet
      */
     void HandleRecv(Ptr<Socket> socket);
-    void SetVideoMode(bool enable);
     void VideoFrameAcked(uint32_t pathId, bool isKeyFrame, uint32_t frameSize);
     bool SelectPathForFrame(bool isKeyFrame, uint32_t& pathId);
     bool IsReady(void) const;
     uint32_t GetPacketSize(void) const;
+    void SetNadaAdaptability(uint32_t pathId, DataRate minRate, DataRate maxRate, Time rttMax);
+    void SetVideoMode(bool enable);
+    void SetKeyFrameStatus(bool isKeyFrame);
+
+    void InitializePathSocket(uint32_t pathId);
+    void ReportSocketStatus();
+
+    void ValidateAllSockets(void);
+    void GetAvailablePaths(std::vector<uint32_t>& outPaths) const;
+    bool Send(Ptr<Packet> packet = nullptr);
+
+    void SetPathSelectionStrategy(uint32_t strategy);
+    std::string GetStrategyName(uint32_t strategy) const;
 
   protected:
     virtual void DoDispose(void);
-    void InitializePathSocket(uint32_t pathId);
+    bool IsSocketReady(Ptr<Socket> socket) const;
+    void ValidatePathSocket(uint32_t pathId);
+
     uint32_t GetBestPath(const std::vector<uint32_t>& readyPaths);
     uint32_t GetWeightedPath(const std::vector<uint32_t>& readyPaths);
-    void ReportSocketStatus();
+    uint32_t GetFrameAwarePath(const std::vector<uint32_t>& readyPaths, bool isKeyFrame);
+    bool SendRedundantlyPath(const std::vector<uint32_t>& readyPaths, Ptr<Packet> packet);
+    bool IsValidNadaHeader(Ptr<Packet> packet) const;
+
+    bool SendPacketOnPath(uint32_t pathId, Ptr<Packet> packet);
+    bool m_isVideoMode;
+    bool m_isKeyFrame;
 
   private:
     std::map<uint32_t, PathInfo> m_paths;             // Map of path IDs to path information
