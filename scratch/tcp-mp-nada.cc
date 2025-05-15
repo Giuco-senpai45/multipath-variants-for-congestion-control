@@ -36,6 +36,7 @@
 #include "ns3/network-module.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/traffic-control-module.h"
+#include "ns3/video-receiver.h"
 
 using namespace ns3;
 
@@ -267,8 +268,8 @@ SendMultipathVideoFrame(Ptr<MultiPathNadaClient> client,
     Ptr<Counter> packetsSentCounter = Create<Counter>();
     packetsSentCounter->count = 0;
 
-    auto schedulePacket = [client, packetsSentCounter, isKeyFrame, mtu](Time delay) {
-        Simulator::Schedule(delay, [client, packetsSentCounter, isKeyFrame, mtu]() {
+    auto schedulePacket = [client, packetsSentCounter, mtu](Time delay) {
+        Simulator::Schedule(delay, [client, packetsSentCounter, mtu]() {
             if (!client)
             {
                 std::cout << "ERROR: Client pointer is null in scheduled packet send" << std::endl;
@@ -373,6 +374,11 @@ main(int argc, char* argv[])
     // Simulation parameters
     uint32_t packetSize = 1000;
 
+    // Fallbacks for single path cmd args
+    std::string dataRate = "1Mbps";
+    std::string bottleneckBw = "500Mbps";
+    uint32_t delayMs = 10;
+
     // Multipath parameters
     std::string dataRate1 = "10Mbps";
     std::string dataRate2 = "5Mbps";
@@ -397,6 +403,13 @@ main(int argc, char* argv[])
 
     // Parse command line arguments
     CommandLine cmd;
+
+    // fallbacks
+    cmd.AddValue("dataRate", "Data rate of primary source (fallback for singlepath)", dataRate);
+    cmd.AddValue("bottleneckBw", "Bandwidth for", bottleneckBw);
+    cmd.AddValue("delayMs", "Link delay in milliseconds", delayMs);
+
+
     cmd.AddValue("packetSize", "Size of packets to send", packetSize);
     cmd.AddValue("dataRate1", "Data rate of first path", dataRate1);
     cmd.AddValue("dataRate2", "Data rate of second path", dataRate2);
@@ -408,7 +421,7 @@ main(int argc, char* argv[])
     cmd.AddValue("logDetails", "Enable detailed logging", logDetails);
     cmd.AddValue("maxPackets", "Maximum packets to send", maxPackets);
     cmd.AddValue(
-        "pathSelection",
+        "pathSelectionStrategy",
         "Path selection strategy (0=weighted, 1=best, 2=equal, 3=redundant, 4=frame-aware)",
         pathSelectionStrategy);
     cmd.AddValue("competingSourcesA",
@@ -651,7 +664,9 @@ main(int argc, char* argv[])
 
     NS_LOG_INFO("Creating server application at destination");
     // Create server application at destination
-    UdpServerHelper server(port);
+    uint16_t videoPort = 9;
+    VideoReceiverHelper server(videoPort);
+    server.SetAttribute("FrameRate", UintegerValue(frameRate));
     ApplicationContainer serverApp = server.Install(destination.Get(0));
 
     NS_LOG_INFO("Adding path 1 to MultiPathNadaClient");
@@ -1033,6 +1048,7 @@ main(int argc, char* argv[])
         std::cout << "  Total Flows: " << flows.size() << "\n";
         std::cout << "  Total Tx Packets: " << totalTx << "\n";
         std::cout << "  Total Rx Packets: " << totalRx << "\n";
+        std::cout << "  Total Tx Bytes: " << totalTxBytes << "\n";
         std::cout << "  Total Throughput: " << totalRxBytes * 8.0 / simulationTime / 1000000
                   << " Mbps\n";
 
@@ -1048,6 +1064,17 @@ main(int argc, char* argv[])
         }
         std::cout << "\n";
     };
+
+    Ptr<VideoReceiver> videoReceiverInstance = DynamicCast<VideoReceiver>(serverApp.Get(0));
+    if (videoReceiverInstance)
+    {
+        std::cout << "\n=== VIDEO RECEIVER STATISTICS ===\n";
+        std::cout << videoReceiverInstance->GetBufferStats();
+        std::cout << "Buffer underruns: " << videoReceiverInstance->GetBufferUnderruns() << "\n";
+        std::cout << "Average buffer length: " << videoReceiverInstance->GetAverageBufferLength()
+                  << " ms\n";
+    }
+    std::cout << "\n";
 
     printAggStats("WebRTC Source (Multipath)", mainSourceFlows, simulationTime);
     printAggStats("Path A Competing Sources", pathACompetingFlows, simulationTime);

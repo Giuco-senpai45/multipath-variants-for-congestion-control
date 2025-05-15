@@ -72,7 +72,6 @@ NadaCongestionControl::NadaCongestionControl()
       m_currentDelay(0.0),
       m_lossRate(0.0),
       m_referenceDelay(0.010),   // 10ms reference delay
-      m_gamma0(0.001),           // Original gamma from RFC
       m_queueDelayTarget(0.020), // 20ms target queue delay
       m_ewmaFactor(0.1),         // EWMA smoothing factor
       m_ewmaDelayGradient(0.0),   // Initial delay gradient
@@ -185,8 +184,8 @@ NadaCongestionControl::PeriodicUpdate()
 {
     NS_LOG_FUNCTION(this);
 
-    // Update sending rate
-    DataRate newRate = UpdateRate();
+    // Update sending rate without storing unused value
+    UpdateRate();
 
     // Schedule next update - RFC recommends once per RTT or 100ms min
     Time updateInterval = std::max(m_rtt, MilliSeconds(100));

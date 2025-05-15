@@ -188,7 +188,6 @@ class NadaCongestionControl : public Object
 
     // Enhanced RFC 8698 fields
     double m_referenceDelay;    // D_thr from RFC 8698
-    double m_gamma0;            // Original gamma from RFC
     double m_queueDelayTarget;  // Target queue delay
     double m_ewmaFactor;        // EWMA smoothing factor
     double m_ewmaDelayGradient; // EWMA of delay gradient
@@ -205,18 +204,6 @@ class NadaCongestionControl : public Object
     bool m_videoMode;          // Whether video adaptation is active
     double m_lastKeyFrameTime; // Time of last key frame
     uint32_t m_frameSize;      // Current frame size
-
-    // Statistics for debugging/evaluation
-    struct Statistics
-    {
-        double minRtt;
-        double maxRtt;
-        double avgRtt;
-        double stdDevRtt;
-        uint32_t packetsSent;
-        uint32_t packetsLost;
-        double avgRate;
-    } m_stats;
 };
 
 /**

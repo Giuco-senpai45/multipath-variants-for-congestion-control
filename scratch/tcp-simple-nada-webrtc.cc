@@ -47,6 +47,9 @@
 #include "ns3/network-module.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/traffic-control-module.h"
+#include "ns3/video-receiver.h"
+
+#include <vector>
 
 using namespace ns3;
 
@@ -475,7 +478,7 @@ main(int argc, char* argv[])
         NS_LOG_INFO("AQM disabled by command line parameter");
     }
 
-    NetDeviceContainer additionalToIntermediate[numCompetingSources];
+    std::vector<NetDeviceContainer> additionalToIntermediate(numCompetingSources);
     for (uint32_t i = 0; i < numCompetingSources; i++)
     {
         // Create point-to-point connection from additional source to intermediate router
@@ -500,7 +503,7 @@ main(int argc, char* argv[])
     Ipv4InterfaceContainer bottleneckIfaces = ipv4.Assign(intermediateToDestination);
 
     // Assign IPs to additional sources
-    Ipv4InterfaceContainer additionalSourceIfaces[numCompetingSources];
+    std::vector<Ipv4InterfaceContainer> additionalSourceIfaces(numCompetingSources);
     for (uint32_t i = 0; i < numCompetingSources; i++)
     {
         std::stringstream ss;
@@ -602,7 +605,7 @@ main(int argc, char* argv[])
     sinkApps.Stop(Seconds(simulationTime));
 
     // Create competing TCP bulk send applications instead of UDP clients
-    ApplicationContainer competingApps[numCompetingSources];
+    std::vector<ApplicationContainer> competingApps(numCompetingSources);
     for (uint32_t i = 0; i < numCompetingSources; i++)
     {
         // Configure TCP bulk send application
@@ -626,8 +629,11 @@ main(int argc, char* argv[])
     }
 
     // Create UDP receiver at destination
-    UdpServerHelper server(port);
-    ApplicationContainer serverApp = server.Install(destinationRouter.Get(0));
+    VideoReceiverHelper videoReceiver(port);
+    videoReceiver.SetAttribute("FrameRate",
+                               UintegerValue(frameRate)); // Set to match your video frame rate
+    ApplicationContainer serverApp = videoReceiver.Install(destinationRouter.Get(0));
+
     serverApp.Start(Seconds(0.5));
     serverApp.Stop(Seconds(simulationTime));
 
@@ -709,12 +715,15 @@ main(int argc, char* argv[])
         totalRxBytes += i->second.rxBytes;
 
         // Track per-protocol statistics
-        if (isNadaFlow) {
+        if (isNadaFlow)
+        {
             nadaTxPackets += i->second.txPackets;
             nadaRxPackets += i->second.rxPackets;
             nadaTxBytes += i->second.txBytes;
             nadaRxBytes += i->second.rxBytes;
-        } else {
+        }
+        else
+        {
             // Must be TCP competing flow
             tcpTxPackets += i->second.txPackets;
             tcpRxPackets += i->second.rxPackets;
@@ -776,13 +785,15 @@ main(int argc, char* argv[])
     std::cout << "=== NADA/WebRTC STATISTICS ===\n";
     std::cout << "NADA Tx Packets: " << nadaTxPackets << "\n";
     std::cout << "NADA Rx Packets: " << nadaRxPackets << "\n";
-    if (nadaTxPackets > 0) {
-        std::cout << "NADA packet loss: "
-                << 100.0 * (nadaTxPackets - nadaRxPackets) / nadaTxPackets << "%\n";
+    if (nadaTxPackets > 0)
+    {
+        std::cout << "NADA packet loss: " << 100.0 * (nadaTxPackets - nadaRxPackets) / nadaTxPackets
+                  << "%\n";
     }
     std::cout << "NADA Tx Bytes: " << nadaTxBytes << "\n";
     std::cout << "NADA Rx Bytes: " << nadaRxBytes << "\n";
-    if (nadaTxBytes > 0) {
+    if (nadaTxBytes > 0)
+    {
         std::cout << "NADA efficiency: " << 100.0 * nadaRxBytes / nadaTxBytes << "%\n";
     }
 
@@ -790,16 +801,29 @@ main(int argc, char* argv[])
     std::cout << "\n=== TCP COMPETING FLOWS STATISTICS ===\n";
     std::cout << "TCP Tx Packets: " << tcpTxPackets << "\n";
     std::cout << "TCP Rx Packets: " << tcpRxPackets << "\n";
-    if (tcpTxPackets > 0) {
-        std::cout << "TCP packet loss: "
-                << 100.0 * (tcpTxPackets - tcpRxPackets) / tcpTxPackets << "%\n";
+    if (tcpTxPackets > 0)
+    {
+        std::cout << "TCP packet loss: " << 100.0 * (tcpTxPackets - tcpRxPackets) / tcpTxPackets
+                  << "%\n";
     }
     std::cout << "TCP Tx Bytes: " << tcpTxBytes << "\n";
     std::cout << "TCP Rx Bytes: " << tcpRxBytes << "\n";
-    if (tcpTxBytes > 0) {
+    if (tcpTxBytes > 0)
+    {
         std::cout << "TCP efficiency: " << 100.0 * tcpRxBytes / tcpTxBytes << "%\n";
     }
+
+    Ptr<VideoReceiver> videoReceiverApp = DynamicCast<VideoReceiver>(serverApp.Get(0));
+    if (videoReceiverApp)
+    {
+        std::cout << "\n=== VIDEO RECEIVER STATISTICS ===\n";
+        std::cout << videoReceiverApp->GetBufferStats();
+        std::cout << "Buffer underruns: " << videoReceiverApp->GetBufferUnderruns() << "\n";
+        std::cout << "Average buffer length: " << videoReceiverApp->GetAverageBufferLength()
+                  << " ms\n";
+    }
     std::cout << "\n";
+
 
     Simulator::Destroy();
     return 0;

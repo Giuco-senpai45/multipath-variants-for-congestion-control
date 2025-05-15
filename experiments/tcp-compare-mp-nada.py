@@ -202,9 +202,9 @@ PATH_SELECTION_SCENARIOS = [
             "dataRate2": "10Mbps",
             "delayMs": 50,
             "delayMs1": 40,
-            "delayMs2": 80,  # Deliberately unbalanced to show strategy impact
+            "delayMs2": 80,
             "frameRate": 30,
-            "pathSelectionStrategy": 1  # Lowest RTT
+            "pathSelectionStrategy": 1  # Best Bath
         }
     },
     {
@@ -218,7 +218,7 @@ PATH_SELECTION_SCENARIOS = [
             "delayMs1": 50,
             "delayMs2": 50,
             "frameRate": 30,
-            "pathSelectionStrategy": 2  # Highest throughput
+            "pathSelectionStrategy": 2  # Round Robin
         }
     },
     {
@@ -232,7 +232,6 @@ PATH_SELECTION_SCENARIOS = [
             "delayMs1": 40,
             "delayMs2": 60,
             "frameRate": 30,
-            "pathSelectionStrategy": 3  # Weighted load balancing
         }
     },
     {
@@ -246,7 +245,7 @@ PATH_SELECTION_SCENARIOS = [
             "delayMs1": 50,
             "delayMs2": 50,
             "frameRate": 30,
-            "pathSelectionStrategy": 4,  # Redundant transmission
+            "pathSelectionStrategy": 3,  # Redundant transmission
             "packetLoss1": 5.0,  # Add some packet loss to see redundancy benefits
             "packetLoss2": 5.0
         }
@@ -262,7 +261,7 @@ PATH_SELECTION_SCENARIOS = [
             "delayMs1": 40,
             "delayMs2": 60,
             "frameRate": 30,
-            "pathSelectionStrategy": 5,  # Frame type aware (I-frames on best path)
+            "pathSelectionStrategy": 4,  # Frame type aware (I-frames on best path)
             "keyFrameInterval": 30  # Generate key frames every 30 frames
         }
     }
@@ -280,7 +279,6 @@ def run_simulation(script_name, params=None):
     """Run the specified simulation script with parameters and return the output."""
     cmd = ["./ns3", "run", script_name]
     if params:
-        cmd.append("--")
         for key, value in params.items():
             cmd.append(f"--{key}={value}")
 
@@ -312,6 +310,9 @@ def parse_output(output):
     delay_re = re.compile(r"Mean delay: ([0-9.e-]+) seconds")
     loss_re = re.compile(r"Packet loss: ([0-9.]+)%")
     jitter_re = re.compile(r"Mean jitter: ([0-9.e-]+) seconds")
+
+    buffer_length_re = re.compile(r"Average buffer length: ([0-9.]+) ms")
+    buffer_underruns_re = re.compile(r"Buffer underruns: ([0-9]+)")
 
     # For multipath, also look for path-specific stats
     path_re = re.compile(r"Path (\d+):")
@@ -349,6 +350,12 @@ def parse_output(output):
         'energy_metrics': [],
         'path_switches': [],
         'quality_changes': []
+    }
+
+    stats['buffer_stats'] = {
+        'length': [],
+        'underruns': 0,
+        'average_ms': 0
     }
 
     current_path = None
@@ -460,6 +467,18 @@ def parse_output(output):
             stats['quality_changes'].append((from_quality, to_quality))
             continue
 
+        buffer_length_match = buffer_length_re.search(line)
+        if buffer_length_match:
+            stats['buffer_stats']['average_ms'] = float(buffer_length_match.group(1))
+            stats['buffer_stats']['length'].append(float(buffer_length_match.group(1)))
+            continue
+
+        # Extract buffer underruns
+        buffer_underruns_match = buffer_underruns_re.search(line)
+        if buffer_underruns_match:
+            stats['buffer_stats']['underruns'] = int(buffer_underruns_match.group(1))
+            continue
+
     # Check if we parsed any data
     if not stats['throughput'] and not stats['delay'] and not stats['loss']:
         print("Warning: No metrics were parsed from the output. Check the simulation output format.")
@@ -510,6 +529,17 @@ def analyze_results(multipath_stats, simple_stats):
 
     mp_tcp_retrans = np.sum(multipath_stats['tcp_stats']['retrans']) if multipath_stats['tcp_stats']['retrans'] else 0
     simple_tcp_retrans = np.sum(simple_stats['tcp_stats']['retrans']) if simple_stats['tcp_stats']['retrans'] else 0
+
+    mp_buffer_avg = multipath_stats['buffer_stats']['average_ms'] if 'buffer_stats' in multipath_stats else 0
+    mp_buffer_underruns = multipath_stats['buffer_stats']['underruns'] if 'buffer_stats' in multipath_stats else 0
+
+    simple_buffer_avg = simple_stats['buffer_stats']['average_ms'] if 'buffer_stats' in simple_stats else 0
+    simple_buffer_underruns = simple_stats['buffer_stats']['underruns'] if 'buffer_stats' in simple_stats else 0
+
+    buffer_metrics = [
+        ['Buffer Length (ms)', mp_buffer_avg, simple_buffer_avg],
+        ['Buffer Underruns', mp_buffer_underruns, simple_buffer_underruns]
+    ]
 
     # Path utilization for multipath (if available)
     path_utilization = {}
@@ -615,6 +645,24 @@ def analyze_results(multipath_stats, simple_stats):
             'Improvement (%)': improvement
         }
 
+    for metric in buffer_metrics:
+        improvement = float('nan')
+        if not np.isnan(metric[1]) and not np.isnan(metric[2]) and metric[2] != 0:
+            if 'Underruns' in metric[0]:
+                # For underruns, lower is better (calculate percentage reduction)
+                improvement = ((simple_buffer_underruns - mp_buffer_underruns) / max(1, simple_buffer_underruns)) * 100
+            else:
+                # For buffer length, higher is better
+                improvement = ((mp_buffer_avg - simple_buffer_avg) / simple_buffer_avg) * 100 if simple_buffer_avg > 0 else float('nan')
+
+        new_idx = len(comparison_df)
+        comparison_df.loc[new_idx] = {
+            'Metric': metric[0],
+            'TCP-Multipath': metric[1],
+            'TCP-Simple': metric[2],
+            'Improvement (%)': improvement
+        }
+
     # Create path utilization dataframe if data exists
     path_df = pd.DataFrame()
     if path_utilization:
@@ -655,7 +703,12 @@ def generate_dummy_data(scenario_name):
         },
         'energy_metrics': [],
         'path_switches': [],
-        'quality_changes': []
+        'quality_changes': [],
+        'buffer_stats': {
+            'length': [],
+            'underruns': 0,
+            'average_ms': 0
+        }
     }
 
     # Base simple stats
@@ -670,7 +723,12 @@ def generate_dummy_data(scenario_name):
             'rtt': [],
             'retrans': []
         },
-        'energy_metrics': []
+        'energy_metrics': [],
+        'buffer_stats': {
+            'length': [],
+            'underruns': 0,
+            'average_ms': 0
+        }
     }
 
     # Configure scenario-specific parameters
@@ -687,6 +745,9 @@ def generate_dummy_data(scenario_name):
         multipath_stats['tcp_stats']['cwnd'] = [50, 48, 52]
         multipath_stats['tcp_stats']['retrans'] = [5, 3, 2]
         multipath_stats['energy_metrics'] = [95.5, 94.8, 95.2]
+        multipath_stats['buffer_stats']['length'] = [85, 90, 92]
+        multipath_stats['buffer_stats']['underruns'] = 0
+        multipath_stats['buffer_stats']['average_ms'] = 89
 
         simple_stats['throughput'] = [8.8, 9.0, 8.9]
         simple_stats['delay'] = [0.056, 0.059, 0.057]
@@ -695,6 +756,9 @@ def generate_dummy_data(scenario_name):
         simple_stats['tcp_stats']['cwnd'] = [40, 42, 41]
         simple_stats['tcp_stats']['retrans'] = [10, 8, 9]
         simple_stats['energy_metrics'] = [93.2, 92.5, 93.8]
+        simple_stats['buffer_stats']['length'] = [70, 65, 68]
+        simple_stats['buffer_stats']['underruns'] = 2
+        simple_stats['buffer_stats']['average_ms'] = 67.7
 
     elif "Asymmetric Paths" in scenario_name:
         # Shows how multipath better utilizes asymmetric paths
@@ -715,15 +779,21 @@ def generate_dummy_data(scenario_name):
         multipath_stats['tcp_stats']['cwnd'] = [55, 53, 57]
         multipath_stats['tcp_stats']['retrans'] = [3, 2, 1]      # Fewer retransmissions
         multipath_stats['energy_metrics'] = [97.0, 96.8, 97.2]   # Higher efficiency
-        multipath_stats['path_switches'] = [(2, 1), (2, 1)]      # Path switches to path 1
+        multipath_stats['path_switches'] = [(2, 1), (2, 1)]
+        multipath_stats['buffer_stats']['length'] = [95, 96, 98]
+        multipath_stats['buffer_stats']['underruns'] = 0
+        multipath_stats['buffer_stats']['average_ms'] = 96.3
 
-        simple_stats['throughput'] = [9.2, 9.3, 9.0]             # Single path limited
+        simple_stats['throughput'] = [9.2, 9.3, 9.0]
         simple_stats['delay'] = [0.050, 0.053, 0.049]
         simple_stats['loss'] = [1.5, 1.6, 1.4]
         simple_stats['jitter'] = [0.010, 0.012, 0.011]
         simple_stats['tcp_stats']['cwnd'] = [45, 47, 46]
         simple_stats['tcp_stats']['retrans'] = [8, 7, 6]
         simple_stats['energy_metrics'] = [94.0, 93.8, 94.2]
+        simple_stats['buffer_stats']['length'] = [75, 72, 74]
+        simple_stats['buffer_stats']['underruns'] = 1
+        simple_stats['buffer_stats']['average_ms'] = 73.7
 
     elif "High Latency Second Path" in scenario_name:
         # Shows how multipath minimizes use of high latency path
@@ -745,6 +815,9 @@ def generate_dummy_data(scenario_name):
         multipath_stats['tcp_stats']['retrans'] = [4, 3, 2]
         multipath_stats['energy_metrics'] = [96.0, 95.8, 96.2]
         multipath_stats['path_switches'] = [(2, 1), (2, 1), (2, 1)]  # More switches to path 1
+        multipath_stats['buffer_stats']['length'] = [88, 85, 87]
+        multipath_stats['buffer_stats']['underruns'] = 0
+        multipath_stats['buffer_stats']['average_ms'] = 86.7
 
         simple_stats['throughput'] = [8.5, 8.7, 8.3]
         simple_stats['delay'] = [0.080, 0.085, 0.075]           # Higher delay - only one path
@@ -753,6 +826,9 @@ def generate_dummy_data(scenario_name):
         simple_stats['tcp_stats']['cwnd'] = [38, 40, 39]
         simple_stats['tcp_stats']['retrans'] = [12, 11, 13]
         simple_stats['energy_metrics'] = [92.0, 91.5, 92.5]
+        simple_stats['buffer_stats']['length'] = [60, 58, 62]
+        simple_stats['buffer_stats']['underruns'] = 3
+        simple_stats['buffer_stats']['average_ms'] = 60.0
 
     elif "Low Bandwidth" in scenario_name:
         # Shows multipath's ability to aggregate limited bandwidth
@@ -769,6 +845,9 @@ def generate_dummy_data(scenario_name):
         multipath_stats['tcp_stats']['cwnd'] = [30, 32, 31]
         multipath_stats['tcp_stats']['retrans'] = [7, 6, 8]
         multipath_stats['energy_metrics'] = [94.0, 93.8, 94.2]
+        multipath_stats['buffer_stats']['length'] = [65, 68, 64]
+        multipath_stats['buffer_stats']['underruns'] = 2
+        multipath_stats['buffer_stats']['average_ms'] = 65.7
 
         simple_stats['throughput'] = [4.2, 4.3, 4.1]             # Lower throughput
         simple_stats['delay'] = [0.065, 0.067, 0.063]
@@ -777,6 +856,9 @@ def generate_dummy_data(scenario_name):
         simple_stats['tcp_stats']['cwnd'] = [25, 26, 24]
         simple_stats['tcp_stats']['retrans'] = [10, 9, 11]
         simple_stats['energy_metrics'] = [91.5, 91.0, 92.0]
+        simple_stats['buffer_stats']['length'] = [40, 45, 42]
+        simple_stats['buffer_stats']['underruns'] = 8
+        simple_stats['buffer_stats']['average_ms'] = 42.3
 
     elif "High Bandwidth" in scenario_name:
         # Shows multipath's advantage in high bandwidth scenarios
@@ -791,6 +873,9 @@ def generate_dummy_data(scenario_name):
         multipath_stats['tcp_stats']['cwnd'] = [65, 67, 63]
         multipath_stats['tcp_stats']['retrans'] = [3, 2, 4]
         multipath_stats['energy_metrics'] = [98.0, 97.8, 98.2]
+        multipath_stats['buffer_stats']['length'] = [98, 99, 97]
+        multipath_stats['buffer_stats']['underruns'] = 0
+        multipath_stats['buffer_stats']['average_ms'] = 98.0
 
         simple_stats['throughput'] = [17.8, 18.0, 17.6]
         simple_stats['delay'] = [0.030, 0.032, 0.028]
@@ -799,6 +884,9 @@ def generate_dummy_data(scenario_name):
         simple_stats['tcp_stats']['cwnd'] = [60, 62, 58]
         simple_stats['tcp_stats']['retrans'] = [5, 4, 6]
         simple_stats['energy_metrics'] = [96.5, 96.0, 97.0]
+        simple_stats['buffer_stats']['length'] = [92, 90, 94]
+        simple_stats['buffer_stats']['underruns'] = 0
+        simple_stats['buffer_stats']['average_ms'] = 92.0
 
     elif "Combined Paths Exceed Single Path" in scenario_name:
         # Shows multipath's advantage when combined paths exceed single path capacity
@@ -813,6 +901,9 @@ def generate_dummy_data(scenario_name):
         multipath_stats['tcp_stats']['cwnd'] = [60, 62, 58]
         multipath_stats['tcp_stats']['retrans'] = [4, 3, 5]
         multipath_stats['energy_metrics'] = [97.5, 97.0, 98.0]
+        multipath_stats['buffer_stats']['length'] = [96, 97, 95]
+        multipath_stats['buffer_stats']['underruns'] = 0
+        multipath_stats['buffer_stats']['average_ms'] = 96.0
 
         simple_stats['throughput'] = [9.8, 10.0, 9.6]           # Much lower throughput
         simple_stats['delay'] = [0.040, 0.042, 0.038]
@@ -821,6 +912,9 @@ def generate_dummy_data(scenario_name):
         simple_stats['tcp_stats']['cwnd'] = [45, 47, 43]
         simple_stats['tcp_stats']['retrans'] = [8, 7, 9]
         simple_stats['energy_metrics'] = [95.0, 94.5, 95.5]
+        simple_stats['buffer_stats']['length'] = [78, 75, 76]
+        simple_stats['buffer_stats']['underruns'] = 1
+        simple_stats['buffer_stats']['average_ms'] = 76.3
 
     elif "One Path Failure" in scenario_name:
         # Shows multipath's resiliency with a failed second path
@@ -842,6 +936,9 @@ def generate_dummy_data(scenario_name):
         multipath_stats['tcp_stats']['retrans'] = [6, 5, 7]
         multipath_stats['energy_metrics'] = [94.5, 94.0, 95.0]
         multipath_stats['path_switches'] = [(2, 1), (2, 1), (2, 1), (2, 1)]  # Many switches to path 1
+        multipath_stats['buffer_stats']['length'] = [75, 78, 73]
+        multipath_stats['buffer_stats']['underruns'] = 1
+        multipath_stats['buffer_stats']['average_ms'] = 75.3
 
         simple_stats['throughput'] = [4.5, 5.0, 4.0]            # Severely impacted
         simple_stats['delay'] = [0.180, 0.200, 0.160]           # Much higher delay
@@ -849,7 +946,10 @@ def generate_dummy_data(scenario_name):
         simple_stats['jitter'] = [0.025, 0.030, 0.020]
         simple_stats['tcp_stats']['cwnd'] = [20, 22, 18]
         simple_stats['tcp_stats']['retrans'] = [25, 30, 20]     # Many retransmissions
-        simple_stats['energy_metrics'] = [70.0, 65.0, 75.0]     # Poor efficiency
+        simple_stats['energy_metrics'] = [70.0, 65.0, 75.0]
+        simple_stats['buffer_stats']['length'] = [25, 30, 22]
+        simple_stats['buffer_stats']['underruns'] = 15
+        simple_stats['buffer_stats']['average_ms'] = 25.7# Poor efficiency
 
     # Path selection strategies
     elif "Round Robin Strategy" in scenario_name:
@@ -871,6 +971,9 @@ def generate_dummy_data(scenario_name):
         multipath_stats['tcp_stats']['cwnd'] = [47, 48, 46]
         multipath_stats['tcp_stats']['retrans'] = [7, 6, 8]
         multipath_stats['energy_metrics'] = [93.0, 92.5, 93.5]
+        multipath_stats['buffer_stats']['length'] = [82, 80, 83]
+        multipath_stats['buffer_stats']['underruns'] = 0
+        multipath_stats['buffer_stats']['average_ms'] = 81.7
 
         simple_stats['throughput'] = [8.8, 9.0, 8.6]
         simple_stats['delay'] = [0.056, 0.058, 0.054]
@@ -879,6 +982,9 @@ def generate_dummy_data(scenario_name):
         simple_stats['tcp_stats']['cwnd'] = [42, 43, 41]
         simple_stats['tcp_stats']['retrans'] = [10, 9, 11]
         simple_stats['energy_metrics'] = [91.0, 90.5, 91.5]
+        simple_stats['buffer_stats']['length'] = [72, 70, 73]
+        simple_stats['buffer_stats']['underruns'] = 1
+        simple_stats['buffer_stats']['average_ms'] = 71.7
 
     elif "Lowest RTT Strategy" in scenario_name:
         # Shows preference for the path with lowest RTT
@@ -899,6 +1005,9 @@ def generate_dummy_data(scenario_name):
         multipath_stats['tcp_stats']['cwnd'] = [54, 56, 52]
         multipath_stats['tcp_stats']['retrans'] = [4, 3, 5]
         multipath_stats['energy_metrics'] = [96.0, 95.5, 96.5]
+        multipath_stats['buffer_stats']['length'] = [90, 92, 89]
+        multipath_stats['buffer_stats']['underruns'] = 0
+        multipath_stats['buffer_stats']['average_ms'] = 90.3
 
         simple_stats['throughput'] = [9.0, 9.2, 8.8]
         simple_stats['delay'] = [0.052, 0.054, 0.050]
@@ -907,6 +1016,9 @@ def generate_dummy_data(scenario_name):
         simple_stats['tcp_stats']['cwnd'] = [43, 44, 42]
         simple_stats['tcp_stats']['retrans'] = [9, 8, 10]
         simple_stats['energy_metrics'] = [92.0, 91.5, 92.5]
+        simple_stats['buffer_stats']['length'] = [70, 72, 71]
+        simple_stats['buffer_stats']['underruns'] = 2
+        simple_stats['buffer_stats']['average_ms'] = 71.0
 
     elif "Highest Throughput Strategy" in scenario_name:
         # Shows preference for the path with highest throughput
@@ -927,6 +1039,9 @@ def generate_dummy_data(scenario_name):
         multipath_stats['tcp_stats']['cwnd'] = [55, 57, 53]
         multipath_stats['tcp_stats']['retrans'] = [4, 3, 5]
         multipath_stats['energy_metrics'] = [96.5, 96.0, 97.0]
+        multipath_stats['buffer_stats']['length'] = [92, 94, 93]
+        multipath_stats['buffer_stats']['underruns'] = 0
+        multipath_stats['buffer_stats']['average_ms'] = 93.0
 
         simple_stats['throughput'] = [9.2, 9.4, 9.0]
         simple_stats['delay'] = [0.050, 0.052, 0.048]
@@ -935,6 +1050,9 @@ def generate_dummy_data(scenario_name):
         simple_stats['tcp_stats']['cwnd'] = [44, 45, 43]
         simple_stats['tcp_stats']['retrans'] = [8, 7, 9]
         simple_stats['energy_metrics'] = [93.0, 92.5, 93.5]
+        simple_stats['buffer_stats']['length'] = [74, 76, 75]
+        simple_stats['buffer_stats']['underruns'] = 1
+        simple_stats['buffer_stats']['average_ms'] = 75.0
 
     elif "Weighted Load Balancing" in scenario_name:
         # Shows sophisticated load balancing based on path quality
@@ -955,6 +1073,9 @@ def generate_dummy_data(scenario_name):
         multipath_stats['tcp_stats']['cwnd'] = [56, 58, 54]
         multipath_stats['tcp_stats']['retrans'] = [3, 2, 4]
         multipath_stats['energy_metrics'] = [97.0, 96.5, 97.5]
+        multipath_stats['buffer_stats']['length'] = [94, 95, 93]
+        multipath_stats['buffer_stats']['underruns'] = 0
+        multipath_stats['buffer_stats']['average_ms'] = 94.0
 
         simple_stats['throughput'] = [9.3, 9.5, 9.1]
         simple_stats['delay'] = [0.048, 0.050, 0.046]
@@ -963,6 +1084,9 @@ def generate_dummy_data(scenario_name):
         simple_stats['tcp_stats']['cwnd'] = [45, 46, 44]
         simple_stats['tcp_stats']['retrans'] = [8, 7, 9]
         simple_stats['energy_metrics'] = [93.5, 93.0, 94.0]
+        simple_stats['buffer_stats']['length'] = [75, 77, 74]
+        simple_stats['buffer_stats']['underruns'] = 1
+        simple_stats['buffer_stats']['average_ms'] = 75.3
 
     elif "Redundant Transmission" in scenario_name:
         # Shows benefits of redundant transmission for lossy paths
@@ -982,7 +1106,10 @@ def generate_dummy_data(scenario_name):
         multipath_stats['paths'][2]['weight'] = 0.5
         multipath_stats['tcp_stats']['cwnd'] = [46, 47, 45]
         multipath_stats['tcp_stats']['retrans'] = [2, 1, 3]     # Very few retransmissions
-        multipath_stats['energy_metrics'] = [92.0, 91.5, 92.5]  # Less efficient due to redundancy
+        multipath_stats['energy_metrics'] = [92.0, 91.5, 92.5]
+        multipath_stats['buffer_stats']['length'] = [96, 97, 98]
+        multipath_stats['buffer_stats']['underruns'] = 0
+        multipath_stats['buffer_stats']['average_ms'] = 97.0# Less efficient due to redundancy
 
         simple_stats['throughput'] = [8.5, 8.7, 8.3]
         simple_stats['delay'] = [0.045, 0.047, 0.043]
@@ -991,6 +1118,9 @@ def generate_dummy_data(scenario_name):
         simple_stats['tcp_stats']['cwnd'] = [40, 41, 39]
         simple_stats['tcp_stats']['retrans'] = [20, 22, 18]     # Many retransmissions
         simple_stats['energy_metrics'] = [88.0, 87.5, 88.5]
+        simple_stats['buffer_stats']['length'] = [60, 62, 58]
+        simple_stats['buffer_stats']['underruns'] = 5
+        simple_stats['buffer_stats']['average_ms'] = 60.0
 
     elif "Frame Type Aware Strategy" in scenario_name:
         # Shows benefits of frame-aware path selection
@@ -1010,6 +1140,9 @@ def generate_dummy_data(scenario_name):
         multipath_stats['tcp_stats']['retrans'] = [4, 3, 5]
         multipath_stats['energy_metrics'] = [95.0, 94.5, 95.5]
         multipath_stats['quality_changes'] = [(0.8, 0.9), (0.9, 0.95)]  # Quality improvements
+        multipath_stats['buffer_stats']['length'] = [90, 92, 91]
+        multipath_stats['buffer_stats']['underruns'] = 0
+        multipath_stats['buffer_stats']['average_ms'] = 91.0
 
         simple_stats['throughput'] = [9.0, 9.2, 8.8]
         simple_stats['delay'] = [0.048, 0.050, 0.046]
@@ -1018,6 +1151,9 @@ def generate_dummy_data(scenario_name):
         simple_stats['tcp_stats']['cwnd'] = [43, 44, 42]
         simple_stats['tcp_stats']['retrans'] = [9, 8, 10]
         simple_stats['energy_metrics'] = [92.5, 92.0, 93.0]
+        simple_stats['buffer_stats']['length'] = [72, 74, 71]
+        simple_stats['buffer_stats']['underruns'] = 2
+        simple_stats['buffer_stats']['average_ms'] = 72.3
 
     else:  # Any other scenario - congested network etc.
         # Default reasonable values
@@ -1032,6 +1168,9 @@ def generate_dummy_data(scenario_name):
         multipath_stats['tcp_stats']['cwnd'] = [48, 50, 46]
         multipath_stats['tcp_stats']['retrans'] = [6, 5, 7]
         multipath_stats['energy_metrics'] = [94.0, 93.5, 94.5]
+        multipath_stats['buffer_stats']['length'] = [80, 82, 79]
+        multipath_stats['buffer_stats']['underruns'] = 1
+        multipath_stats['buffer_stats']['average_ms'] = 80.3
 
         simple_stats['throughput'] = [8.7, 8.9, 8.5]
         simple_stats['delay'] = [0.058, 0.060, 0.056]
@@ -1040,10 +1179,66 @@ def generate_dummy_data(scenario_name):
         simple_stats['tcp_stats']['cwnd'] = [42, 43, 41]
         simple_stats['tcp_stats']['retrans'] = [10, 9, 11]
         simple_stats['energy_metrics'] = [92.0, 91.5, 92.5]
+        simple_stats['buffer_stats']['length'] = [65, 67, 64]
+        simple_stats['buffer_stats']['underruns'] = 3
+        simple_stats['buffer_stats']['average_ms'] = 65.3
 
     return multipath_stats, simple_stats
 
-# Function to generate visualizations for a single scenario
+def generate_buffer_visualizations(comparison_df, scenario_name, scenario_folder, timestamp):
+    """Generate visualizations specifically for buffer metrics."""
+    buffer_data = comparison_df[comparison_df['Metric'].isin(['Buffer Length (ms)', 'Buffer Underruns'])]
+
+    if buffer_data.empty:
+        print("No buffer data to visualize")
+        return
+
+    plt.figure(figsize=(12, 6))
+
+    # Create subplots for different buffer metrics
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+
+    # Plot buffer length
+    buffer_length_data = buffer_data[buffer_data['Metric'] == 'Buffer Length (ms)']
+    if not buffer_length_data.empty:
+        length_bars = ax1.bar(['TCP-Multipath', 'TCP-Simple'],
+                            [buffer_length_data['TCP-Multipath'].values[0],
+                             buffer_length_data['TCP-Simple'].values[0]],
+                            color=['#1f77b4', '#ff7f0e'])
+        ax1.set_title('Buffer Length Comparison')
+        ax1.set_ylabel('Average Buffer Length (ms)')
+        ax1.grid(axis='y')
+        # Add value labels
+        for bar in length_bars:
+            height = bar.get_height()
+            ax1.text(bar.get_x() + bar.get_width()/2., height + 1,
+                    f'{height:.1f}',
+                    ha='center', va='bottom')
+
+    # Plot buffer underruns
+    buffer_underruns_data = buffer_data[buffer_data['Metric'] == 'Buffer Underruns']
+    if not buffer_underruns_data.empty:
+        underrun_bars = ax2.bar(['TCP-Multipath', 'TCP-Simple'],
+                              [buffer_underruns_data['TCP-Multipath'].values[0],
+                               buffer_underruns_data['TCP-Simple'].values[0]],
+                              color=['#1f77b4', '#ff7f0e'])
+        ax2.set_title('Buffer Underruns Comparison')
+        ax2.set_ylabel('Number of Buffer Underruns')
+        ax2.grid(axis='y')
+        # Add value labels
+        for bar in underrun_bars:
+            height = bar.get_height()
+            ax2.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                    f'{int(height)}',
+                    ha='center', va='bottom')
+
+    plt.suptitle(f'Buffer Performance Metrics - {scenario_name}')
+    plt.tight_layout()
+
+    buffer_plot = f"{scenario_folder}/buffer_metrics_{timestamp}.png"
+    plt.savefig(buffer_plot)
+    print(f"Saved buffer metrics plot to {buffer_plot}")
+
 def generate_visualizations(comparison_df, path_df, scenario_name):
     """Generate visualizations from the comparison DataFrame."""
     if comparison_df.empty:
@@ -1073,12 +1268,22 @@ def generate_visualizations(comparison_df, path_df, scenario_name):
             return
 
     try:
-        # Bar chart for comparison
+        # Extract multipath-specific metrics for a separate chart
+        multipath_only_metrics = ['Path Utilization Ratio (%)', 'Energy Efficiency (%)']
+        multipath_data = comparison_df[comparison_df['Metric'].isin(multipath_only_metrics)]
+
+        # Remove these metrics from the main comparison dataframe for plotting
+        common_metrics = comparison_df[~comparison_df['Metric'].isin(multipath_only_metrics)]
+
+        # Generate dedicated buffer visualizations
+        generate_buffer_visualizations(comparison_df, scenario_name, scenario_folder, timestamp)
+
+        # Bar chart for comparison of common metrics (excluding buffer metrics)
         plt.figure(figsize=(12, 8))
 
-        # First subplot for raw values (except MOS which has its own scale)
+        # First subplot for raw values (except MOS and buffer metrics)
         plt.subplot(2, 1, 1)
-        metrics_to_plot = comparison_df[~comparison_df['Metric'].isin(['Estimated MOS (1-5)', 'TCP Retransmissions', 'TCP Congestion Window (packets)'])]
+        metrics_to_plot = common_metrics[~common_metrics['Metric'].isin(['Estimated MOS (1-5)', 'TCP Retransmissions', 'TCP Congestion Window (packets)', 'Buffer Length (ms)', 'Buffer Underruns'])]
 
         ax = metrics_to_plot.set_index('Metric')[['TCP-Multipath', 'TCP-Simple']].plot(kind='bar', ax=plt.gca())
         plt.title(f'Comparison of TCP-Multipath vs TCP-Simple NADA - {scenario_name}')
@@ -1092,7 +1297,7 @@ def generate_visualizations(comparison_df, path_df, scenario_name):
 
         # Second subplot for MOS
         plt.subplot(2, 1, 2)
-        mos_data = comparison_df[comparison_df['Metric'] == 'Estimated MOS (1-5)']
+        mos_data = common_metrics[common_metrics['Metric'] == 'Estimated MOS (1-5)']
         ax2 = mos_data.set_index('Metric')[['TCP-Multipath', 'TCP-Simple']].plot(kind='bar', ax=plt.gca(), color=['#1f77b4', '#ff7f0e'])
         plt.title(f'Video Quality Estimation (MOS) - {scenario_name}')
         plt.ylabel('Estimated MOS (1-5)')
@@ -1108,9 +1313,27 @@ def generate_visualizations(comparison_df, path_df, scenario_name):
         plt.savefig(comparison_plot)
         print(f"Saved comparison plot to {comparison_plot}")
 
+        # Create a separate visualization for multipath-specific metrics
+        if not multipath_data.empty:
+            plt.figure(figsize=(10, 6))
+            ax_mp = multipath_data.set_index('Metric')['TCP-Multipath'].plot(kind='bar', color='green')
+            plt.title(f'TCP-Multipath Specific Metrics - {scenario_name}')
+            plt.ylabel('Value (%)')
+            plt.grid(axis='y')
+            plt.ylim(0, 105)  # Assuming percentages 0-100 with a bit of margin
+
+            # Add value labels on top of bars
+            for container in ax_mp.containers:
+                ax_mp.bar_label(container, fmt='%.1f%%')
+
+            plt.tight_layout()
+            multipath_plot = f"{scenario_folder}/multipath_metrics_{timestamp}.png"
+            plt.savefig(multipath_plot)
+            print(f"Saved multipath-specific metrics plot to {multipath_plot}")
+
         # Create a plot for TCP specific metrics
         plt.figure(figsize=(12, 6))
-        tcp_data = comparison_df[comparison_df['Metric'].isin(['TCP Retransmissions', 'TCP Congestion Window (packets)'])]
+        tcp_data = common_metrics[common_metrics['Metric'].isin(['TCP Retransmissions', 'TCP Congestion Window (packets)'])]
 
         ax3 = tcp_data.set_index('Metric')[['TCP-Multipath', 'TCP-Simple']].plot(kind='bar', ax=plt.gca())
         plt.title(f'TCP Metrics Comparison - {scenario_name}')
@@ -1126,10 +1349,10 @@ def generate_visualizations(comparison_df, path_df, scenario_name):
         plt.savefig(tcp_plot)
         print(f"Saved TCP metrics plot to {tcp_plot}")
 
-        # Create a plot for improvement percentage
+        # Create a plot for improvement percentage (only for common metrics)
         plt.figure(figsize=(10, 6))
-        # Remove NaN values
-        improvement_data = comparison_df.dropna(subset=['Improvement (%)'])
+        # Remove NaN values and multipath-only metrics
+        improvement_data = common_metrics.dropna(subset=['Improvement (%)'])
 
         ax4 = improvement_data.set_index('Metric')['Improvement (%)'].plot(kind='bar', color='green')
         plt.title(f'Performance Improvement of TCP-Multipath over TCP-Simple NADA (%) - {scenario_name}')
@@ -1237,8 +1460,14 @@ def generate_summary_visualizations(all_results):
     plt.close()
 
     # Create a grouped bar chart comparing TCP-Multipath vs TCP-Simple across scenarios for key metrics
-    for metric in ['Throughput (Mbps)', 'Delay (seconds)', 'Loss (%)', 'Estimated MOS (1-5)', 'TCP Retransmissions']:
+    for metric in ['Throughput (Mbps)', 'Delay (seconds)', 'Loss (%)', 'Estimated MOS (1-5)',
+                   'TCP Retransmissions', 'TCP Congestion Window (packets)',
+                   'Buffer Length (ms)', 'Buffer Underruns']:
         metric_data = summary_df[summary_df['Metric'] == metric]
+
+        if metric_data.empty:
+            print(f"No data for metric: {metric}")
+            continue
 
         fig, ax = plt.subplots(figsize=(14, 8))
 
@@ -1251,9 +1480,16 @@ def generate_summary_visualizations(all_results):
         rects1 = ax.bar(x - width/2, metric_data['TCP-Multipath'].values, width, label='TCP-Multipath NADA')
         rects2 = ax.bar(x + width/2, metric_data['TCP-Simple'].values, width, label='TCP-Simple NADA')
 
+
         # Add labels and title
         ax.set_ylabel(metric)
         ax.set_title(f'Comparison of {metric} Across Different Scenarios')
+
+        if metric in ['Buffer Length (ms)', 'Buffer Underruns']:
+            ax.set_title(f'Buffer Performance: {metric} Across Different Scenarios')
+        else:
+            ax.set_title(f'Comparison of {metric} Across Different Scenarios')
+
         ax.set_xticks(x)
         ax.set_xticklabels(scenarios, rotation=45, ha='right')
         ax.legend()

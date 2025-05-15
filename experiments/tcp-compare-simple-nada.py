@@ -222,6 +222,11 @@ def parse_output(output):
     tcp_loss_re = re.compile(r"TCP packet loss: ([0-9.]+)%")
     tcp_efficiency_re = re.compile(r"TCP efficiency: ([0-9.]+)%")
 
+    buffer_underruns_re = re.compile(r"Buffer underruns: (\d+)")
+    avg_buffer_length_re = re.compile(r"Average buffer length: ([0-9.]+) ms")
+    buffer_stalls_re = re.compile(r"Buffer stalls: (\d+)")
+    buffer_variance_re = re.compile(r"Buffer variance: ([0-9.]+)")
+
     lines = output.split('\n')
 
     # Initialize stats dictionary with additional fields for NADA and TCP
@@ -247,7 +252,12 @@ def parse_output(output):
         'tcp_rx_bytes': None,
         'tcp_loss': None,
         'tcp_efficiency': None,
-        'tcp_throughput': None
+        'tcp_throughput': None,
+
+        'buffer_underruns': None,
+        'avg_buffer_length': None,
+        'buffer_stalls': None,
+        'buffer_variance': None
     }
 
     # Parse individual flow statistics first
@@ -274,6 +284,29 @@ def parse_output(output):
         jitter_match = jitter_re.search(line)
         if jitter_match:
             stats['jitter'].append(float(jitter_match.group(1)))
+            continue
+
+        buffer_underruns_match = buffer_underruns_re.search(line)
+        if buffer_underruns_match:
+            stats['buffer_underruns'] = int(buffer_underruns_match.group(1))
+            continue
+
+        # Parse average buffer length
+        avg_buffer_length_match = avg_buffer_length_re.search(line)
+        if avg_buffer_length_match:
+            stats['avg_buffer_length'] = float(avg_buffer_length_match.group(1))
+            continue
+
+        # Check for buffer stalls
+        buffer_stalls_match = buffer_stalls_re.search(line)
+        if buffer_stalls_match:
+            stats['buffer_stalls'] = int(buffer_stalls_match.group(1))
+            continue
+
+        # Check for buffer variance
+        buffer_variance_match = buffer_variance_re.search(line)
+        if buffer_variance_match:
+            stats['buffer_variance'] = float(buffer_variance_match.group(1))
             continue
 
     # Parse NADA-specific metrics
@@ -381,38 +414,44 @@ def parse_output(output):
                   f"{stats['tcp_rx_bytes']} rx bytes, "
                   f"{stats['tcp_loss'] if stats['tcp_loss'] is not None else 'N/A'}% loss")
 
+        if stats['buffer_underruns'] is not None or stats['avg_buffer_length'] is not None:
+            print(f"Parsed buffer metrics - Underruns: {stats['buffer_underruns']}, "
+              f"Avg length: {stats['avg_buffer_length']} ms, "
+              f"Stalls: {stats['buffer_stalls']}, "
+              f"Variance: {stats['buffer_variance']}")
+
     return stats
 
 # Update the analyze_results function to use the new parsed metrics
-def analyze_results(nada_stats, basic_stats):
+def analyze_results(multipath_stats, basic_stats):
     """Analyze and compare the results from NADA and basic simulations."""
     # Ensure we have data to analyze
-    if not nada_stats or not basic_stats:
+    if not multipath_stats or not basic_stats:
         print("Error: Missing data for analysis")
         return pd.DataFrame()
 
     # Calculate averages safely (avoid division by zero)
     # Use NADA specific metrics if available, otherwise fall back to general metrics
-    if nada_stats['nada_throughput'] is not None:
-        nada_throughput = nada_stats['nada_throughput']
+    if multipath_stats['nada_throughput'] is not None:
+        nada_throughput = multipath_stats['nada_throughput']
     else:
-        nada_throughput = sum(nada_stats['throughput']) / len(nada_stats['throughput']) if nada_stats['throughput'] else 0
+        nada_throughput = sum(multipath_stats['throughput']) / len(multipath_stats['throughput']) if multipath_stats['throughput'] else 0
 
     # For TCP metrics in NADA simulation
-    if nada_stats['tcp_throughput'] is not None:
-        nada_tcp_throughput = nada_stats['tcp_throughput']
+    if multipath_stats['tcp_throughput'] is not None:
+        nada_tcp_throughput = multipath_stats['tcp_throughput']
     else:
         nada_tcp_throughput = 0
 
     # Use NADA specific loss if available
-    if nada_stats['nada_loss'] is not None:
-        nada_loss = nada_stats['nada_loss']
+    if multipath_stats['nada_loss'] is not None:
+        nada_loss = multipath_stats['nada_loss']
     else:
-        nada_loss = sum(nada_stats['loss']) / len(nada_stats['loss']) if nada_stats['loss'] else 0
+        nada_loss = sum(multipath_stats['loss']) / len(multipath_stats['loss']) if multipath_stats['loss'] else 0
 
     # Use TCP specific loss if available
-    if nada_stats['tcp_loss'] is not None:
-        nada_tcp_loss = nada_stats['tcp_loss']
+    if multipath_stats['tcp_loss'] is not None:
+        nada_tcp_loss = multipath_stats['tcp_loss']
     else:
         nada_tcp_loss = 0
 
@@ -420,12 +459,22 @@ def analyze_results(nada_stats, basic_stats):
     basic_throughput = sum(basic_stats['throughput']) / len(basic_stats['throughput']) if basic_stats['throughput'] else 0
 
     # Get delay and jitter from general metrics
-    nada_delay = sum(nada_stats['delay']) / len(nada_stats['delay']) if nada_stats['delay'] else 0
-    nada_jitter = sum(nada_stats['jitter']) / len(nada_stats['jitter']) if nada_stats.get('jitter', []) else 0
+    nada_delay = sum(multipath_stats['delay']) / len(multipath_stats['delay']) if multipath_stats['delay'] else 0
+    nada_jitter = sum(multipath_stats['jitter']) / len(multipath_stats['jitter']) if multipath_stats.get('jitter', []) else 0
 
     basic_delay = sum(basic_stats['delay']) / len(basic_stats['delay']) if basic_stats['delay'] else 0
     basic_loss = sum(basic_stats['loss']) / len(basic_stats['loss']) if basic_stats['loss'] else 0
     basic_jitter = sum(basic_stats['jitter']) / len(basic_stats['jitter']) if basic_stats.get('jitter', []) else 0
+
+    mp_buffer_underruns = multipath_stats.get('buffer_underruns', 0)
+    mp_avg_buffer_length = multipath_stats.get('avg_buffer_length', 0)
+    mp_buffer_stalls = multipath_stats.get('buffer_stalls', 0)
+    mp_buffer_variance = multipath_stats.get('buffer_variance', 0)
+
+    simple_buffer_underruns = basic_stats.get('buffer_underruns', 0)
+    simple_avg_buffer_length = basic_stats.get('avg_buffer_length', 0)
+    simple_buffer_stalls = basic_stats.get('buffer_stalls', 0)
+    simple_buffer_variance = basic_stats.get('buffer_variance', 0)
 
     # Calculate MOS (Mean Opinion Score) estimate based on network conditions
     nada_loss_factor = max(0, 1 - (nada_loss / 20))  # Loss above 20% makes video unusable
@@ -480,9 +529,133 @@ def analyze_results(nada_stats, basic_stats):
         ((nada_mos - basic_mos) / basic_mos * 100) if basic_mos else float('nan')  # Higher MOS is better
     ]
 
+    # Calculate a buffer stability score (higher is better)
+    # Inversely proportional to underruns and variance, proportional to buffer length
+    mp_buffer_stability = 0
+    simple_buffer_stability = 0
+
+    if mp_avg_buffer_length > 0:
+        mp_buffer_stability = 100 / (1 + mp_buffer_underruns) * (mp_avg_buffer_length / (1 + (mp_buffer_variance or 0)))
+
+    if simple_avg_buffer_length > 0:
+        simple_buffer_stability = 100 / (1 + simple_buffer_underruns) * (simple_avg_buffer_length / (1 + (simple_buffer_variance or 0)))
+
+    # Calculate QoE impact based on buffer metrics (scale 1-5)
+    # Lower underruns and stalls = better QoE
+    mp_buffer_qoe = max(1, 5 - 0.2 * (mp_buffer_underruns or 0) - 0.1 * (mp_buffer_stalls or 0))
+    simple_buffer_qoe = max(1, 5 - 0.2 * (simple_buffer_underruns or 0) - 0.1 * (simple_buffer_stalls or 0))
+
+    # Add buffer metrics to comparison dataframe
+    buffer_metrics = [
+        ['Buffer Underruns', mp_buffer_underruns, simple_buffer_underruns],
+        ['Avg Buffer Length (ms)', mp_avg_buffer_length, simple_avg_buffer_length],
+        ['Buffer Stalls', mp_buffer_stalls, simple_buffer_stalls],
+        ['Buffer Stability Score', mp_buffer_stability, simple_buffer_stability],
+        ['Buffer QoE Impact (1-5)', mp_buffer_qoe, simple_buffer_qoe]
+    ]
+
+    for metric in buffer_metrics:
+        improvement = float('nan')
+        if not np.isnan(metric[1]) and not np.isnan(metric[2]) and metric[2] != 0:
+            if 'Underruns' in metric[0] or 'Stalls' in metric[0]:
+                # For underruns and stalls, lower is better
+                improvement = ((simple_buffer_underruns - mp_buffer_underruns) / simple_buffer_underruns) * 100 if simple_buffer_underruns else float('nan')
+            else:
+                # For other buffer metrics, higher is better
+                improvement = ((metric[1] - metric[2]) / metric[2]) * 100
+
+        # Add to comparison DataFrame
+        new_idx = len(comparison_df)
+        comparison_df.loc[new_idx] = {
+            'Metric': metric[0],
+            'TCP-Multipath': metric[1],
+            'TCP-Simple': metric[2],
+            'Improvement (%)': improvement
+        }
+
     print("Comparison Results:")
     print(comparison_df)
     return comparison_df
+
+def generate_buffer_visualizations(comparison_df, scenario_name, scenario_folder, timestamp):
+    """Generate visualizations specific to video buffer metrics."""
+    try:
+        # Filter for buffer-related metrics
+        buffer_metrics = comparison_df[comparison_df['Metric'].str.contains('Buffer|QoE')]
+
+        if buffer_metrics.empty:
+            print("No buffer metrics found to visualize")
+            return
+
+        print(f"Generating buffer visualizations for {len(buffer_metrics)} buffer metrics")
+
+        # First figure: Raw buffer metric values
+        plt.figure(figsize=(12, 8))
+
+        ax = buffer_metrics.set_index('Metric')[['TCP-Multipath', 'TCP-Simple']].plot(
+            kind='bar', ax=plt.gca(), color=['#1f77b4', '#ff7f0e'])
+        plt.title(f'Video Buffer Metrics - {scenario_name}')
+        plt.ylabel('Value')
+        plt.grid(axis='y')
+        plt.xticks(rotation=30)
+
+        # Add value labels
+        for container in ax.containers:
+            ax.bar_label(container, fmt='%.2f')
+
+        plt.tight_layout()
+        buffer_plot = f"{scenario_folder}/buffer_metrics_{timestamp}.png"
+        plt.savefig(buffer_plot)
+        print(f"Saved buffer metrics visualization to {buffer_plot}")
+
+        # Second figure: Buffer improvement percentages
+        plt.figure(figsize=(10, 6))
+        improvement_data = buffer_metrics.dropna(subset=['Improvement (%)'])
+
+        if not improvement_data.empty:
+            ax2 = improvement_data.set_index('Metric')['Improvement (%)'].plot(
+                kind='bar', color='green', ax=plt.gca())
+            plt.title(f'Buffer Performance Improvement (%) - {scenario_name}')
+            plt.ylabel('Improvement (%)')
+            plt.axhline(y=0, color='r', linestyle='-')
+            plt.grid(axis='y')
+            plt.xticks(rotation=30)
+
+            # Add value labels
+            ax2.bar_label(ax2.containers[0], fmt='%.1f%%')
+
+            plt.tight_layout()
+            buffer_improvement_plot = f"{scenario_folder}/buffer_improvement_{timestamp}.png"
+            plt.savefig(buffer_improvement_plot)
+            print(f"Saved buffer improvement visualization to {buffer_improvement_plot}")
+
+        # Third figure: QoE impact visualization
+        plt.figure(figsize=(8, 6))
+        qoe_data = buffer_metrics[buffer_metrics['Metric'].str.contains('QoE')]
+
+        if not qoe_data.empty:
+            ax3 = qoe_data.set_index('Metric')[['TCP-Multipath', 'TCP-Simple']].plot(
+                kind='bar', ax=plt.gca(), color=['#1f77b4', '#ff7f0e'])
+            plt.title(f'Buffer QoE Impact - {scenario_name}')
+            plt.ylabel('QoE Score (1-5)')
+            plt.ylim(1, 5)  # QoE scale is 1-5
+            plt.grid(axis='y')
+
+            # Add value labels
+            for container in ax3.containers:
+                ax3.bar_label(container, fmt='%.2f')
+
+            plt.tight_layout()
+            qoe_plot = f"{scenario_folder}/buffer_qoe_{timestamp}.png"
+            plt.savefig(qoe_plot)
+            print(f"Saved buffer QoE visualization to {qoe_plot}")
+
+        plt.close('all')
+
+    except Exception as e:
+        import traceback
+        print(f"Error generating buffer visualizations: {e}")
+        traceback.print_exc()
 
 def generate_visualizations(comparison_df, scenario_name):
     """Generate visualizations from the comparison DataFrame."""
@@ -548,6 +721,8 @@ def generate_visualizations(comparison_df, scenario_name):
     plt.savefig(f"{scenario_folder}/improvement_{timestamp}.png")
 
     plt.close('all')  # Close all figures to free memory
+
+    generate_buffer_visualizations(comparison_df, scenario_name, scenario_folder, timestamp)
 
 # Function to generate summary visualizations across all scenarios
 def generate_summary_visualizations(all_results):
@@ -657,6 +832,78 @@ def generate_summary_visualizations(all_results):
             plt.text(v + (1 if v >= 0 else -1), i, f"{v:.1f}%", va='center')
 
     plt.savefig(f"{summary_folder}/average_improvement_by_scenario_{timestamp}.png")
+
+    for metric in ['Buffer Underruns', 'Avg Buffer Length (ms)', 'Buffer QoE Impact (1-5)']:
+        metric_data = summary_df[summary_df['Metric'] == metric]
+
+        if metric_data.empty:
+            continue
+
+        fig, ax = plt.subplots(figsize=(14, 8))
+
+        # Calculate the positions of the bars
+        scenarios = metric_data['Scenario'].unique()
+        x = np.arange(len(scenarios))
+        width = 0.35
+
+        # Create the grouped bars
+        rects1 = ax.bar(x - width/2, metric_data['TCP-Multipath'].values, width, label='TCP-Multipath NADA')
+        rects2 = ax.bar(x + width/2, metric_data['TCP-Simple'].values, width, label='TCP-Simple NADA')
+
+        # Add labels and title
+        ax.set_ylabel(metric)
+        ax.set_title(f'Comparison of {metric} Across Different Scenarios')
+        ax.set_xticks(x)
+        ax.set_xticklabels(scenarios, rotation=45, ha='right')
+        ax.legend()
+
+        # Add value labels
+        def autolabel(rects):
+            for rect in rects:
+                height = rect.get_height()
+                ax.annotate(f'{height:.2f}',
+                           xy=(rect.get_x() + rect.get_width() / 2, height),
+                           xytext=(0, 3),  # 3 points vertical offset
+                           textcoords="offset points",
+                           ha='center', va='bottom')
+
+        autolabel(rects1)
+        autolabel(rects2)
+
+        # Set y-axis limits appropriately for QoE
+        if 'QoE' in metric:
+            ax.set_ylim(0.8, 5.2)
+
+        # Adjust layout and save
+        fig.tight_layout()
+        metric_name = metric.lower().replace(' ', '_').replace('(', '').replace(')', '')
+        plt.savefig(f"{summary_folder}/{metric_name}_comparison_{timestamp}.png")
+        plt.close(fig)
+
+    # Create a heatmap specific to buffer metrics improvement
+    plt.figure(figsize=(14, 6))
+    buffer_metrics = ['Buffer Underruns', 'Avg Buffer Length (ms)', 'Buffer Stalls',
+                      'Buffer Stability Score', 'Buffer QoE Impact (1-5)']
+    buffer_df = summary_df[summary_df['Metric'].isin(buffer_metrics)]
+
+    if not buffer_df.empty:
+        pivot_buffer = buffer_df.pivot(index='Metric', columns='Scenario', values='Improvement (%)')
+
+        # Use a diverging colormap centered at 0
+        cmap = sns.diverging_palette(240, 10, as_cmap=True)
+
+        # Set a mask for NaN values
+        mask = np.isnan(pivot_buffer.values)
+
+        # Create the heatmap
+        sns.heatmap(pivot_buffer, annot=True, fmt=".1f", cmap=cmap, center=0,
+                    linewidths=.5, cbar_kws={"label": "Improvement %"}, mask=mask)
+
+        plt.title('Buffer Performance Improvement (%) Across Different Scenarios')
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        plt.savefig(f"{summary_folder}/buffer_improvement_heatmap_{timestamp}.png")
+
     plt.close()
 
 # Function to save raw simulation data
@@ -704,11 +951,11 @@ def main():
         save_raw_data(scenario_name, tcp_nada_output, tcp_basic_output)
 
         # Parse outputs
-        tcp_nada_stats = parse_output(tcp_nada_output)
+        tcp_multipath_stats = parse_output(tcp_nada_output)
         tcp_basic_stats = parse_output(tcp_basic_output)
 
         # Analyze results
-        comparison_df = analyze_results(tcp_nada_stats, tcp_basic_stats)
+        comparison_df = analyze_results(tcp_multipath_stats, tcp_basic_stats)
 
         if not comparison_df.empty:
             # Store results for this scenario
