@@ -34,7 +34,6 @@ MultiPathNadaBufferAwareClient::UpdateWeights()
 {
     NS_LOG_FUNCTION(this);
 
-    // **BUFFER_AWARE STRATEGY: Adjust weights based on buffer status**
     double currentBufferMs = 0.0;
     if (m_videoReceiver)
     {
@@ -51,7 +50,6 @@ MultiPathNadaBufferAwareClient::UpdateWeights()
     // If buffer is critically low, prioritize fastest/most reliable paths
     if (bufferRatio < 0.5)
     {
-        // **EMERGENCY MODE: Use best path heavily**
         uint32_t bestPath = GetBestPathByRTT();
         for (auto& pathPair : m_paths)
         {
@@ -73,7 +71,6 @@ MultiPathNadaBufferAwareClient::UpdateWeights()
     }
     else
     {
-        // **NORMAL MODE: Balance based on quality and buffer needs**
         std::map<uint32_t, double> pathMetrics;
 
         for (auto& pathPair : m_paths)

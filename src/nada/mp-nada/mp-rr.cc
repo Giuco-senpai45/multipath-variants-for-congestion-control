@@ -33,7 +33,6 @@ MultiPathNadaRoundRobinClient::UpdateWeights()
 {
     NS_LOG_FUNCTION(this);
 
-    // **ROUND_ROBIN STRATEGY: Equal weights for all paths**
     if (m_paths.empty())
     {
         return;
@@ -81,7 +80,7 @@ MultiPathNadaRoundRobinClient::Send(Ptr<Packet> packet)
         return false;
     }
 
-    // **ULTRA-FAST ROUND-ROBIN: Simple modulo selection**
+
     uint32_t selectedPath = readyPaths[m_currentPathIndex % readyPaths.size()];
     m_currentPathIndex++;
 

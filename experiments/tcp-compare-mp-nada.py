@@ -169,7 +169,7 @@ BASE_SIMULATION_SCENARIOS = [
         }
     },
 
-    # 8. Data Center Network - FIXED: Realistic high-speed congestion
+    # 8. Data Center Network
     {
         "name": "Data Center Network",
         "params": {
@@ -665,7 +665,6 @@ def analyze_results(multipath_stats, simple_stats):
         if theoretical_max > 0:
             path_utilization_ratio = mp_throughput / theoretical_max * 100
 
-    # FIXED: Energy Efficiency calculation based on successful delivery ratio
     mp_delivery_stats = multipath_stats.get('delivery_stats', {})
     simple_delivery_stats = simple_stats.get('delivery_stats', {})
 

@@ -33,7 +33,6 @@ MultiPathNadaWeightedClient::UpdateWeights()
 {
     NS_LOG_FUNCTION(this);
 
-    // **WEIGHTED STRATEGY: Dynamic weight adjustment based on quality metrics**
     std::map<uint32_t, double> pathMetrics;
     double totalQuality = 0.0;
 
@@ -96,7 +95,6 @@ MultiPathNadaWeightedClient::Send(Ptr<Packet> packet)
         return false;
     }
 
-    // **SIMPLIFIED: Use same logic as AggregatePathNadaClient**
     std::vector<uint32_t> availablePaths;
     for (const auto& pathPair : m_paths)
     {
@@ -112,7 +110,6 @@ MultiPathNadaWeightedClient::Send(Ptr<Packet> packet)
         return false;
     }
 
-    // **WEIGHTED: Use weighted path selection (but simplified)**
     uint32_t selectedPath = GetWeightedPath(availablePaths);
 
     if (!packet)
@@ -188,7 +185,6 @@ MultiPathNadaWeightedClient::RecalculatePathOrder()
         return;
     }
 
-    // **PERFORMANCE: Pre-calculate weighted round-robin sequence**
     const uint32_t SEQUENCE_LENGTH = 100; // Process 100 packets per sequence
 
     // Calculate total weight

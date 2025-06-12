@@ -174,7 +174,6 @@ SendAggregateVideoFrame(Ptr<AggregatePathNadaClient> client,
                         uint32_t& totalPacketsSent,
                         uint32_t maxPackets)
 {
-    // **ALIGNED: Same packet limit check as strategy-mp**
     if (totalPacketsSent >= maxPackets)
     {
         NS_LOG_INFO("AGG: Reached maximum packets limit (" << maxPackets << "), stopping transmission");
@@ -198,7 +197,6 @@ SendAggregateVideoFrame(Ptr<AggregatePathNadaClient> client,
         return;
     }
 
-    // **ALIGNED: Same frame logic as strategy-mp**
     bool isKeyFrame = (frameCount % keyFrameInterval == 0);
     uint32_t currentFrameSize = isKeyFrame ? frameSize * 2 : frameSize;
     uint32_t mtu = 1500;
@@ -208,7 +206,6 @@ SendAggregateVideoFrame(Ptr<AggregatePathNadaClient> client,
                 << " (size: " << currentFrameSize
                 << " bytes, packets: " << numPacketsNeeded << ")");
 
-    // **ALIGNED: Configure video frame properties identically**
     client->SetVideoMode(true);
     client->SetKeyFrameStatus(isKeyFrame);
 
@@ -220,7 +217,6 @@ SendAggregateVideoFrame(Ptr<AggregatePathNadaClient> client,
 
     uint32_t packetsToSend = std::min(numPacketsNeeded, maxPackets - totalPacketsSent);
 
-    // **ALIGNED: Same transmission pattern as strategy-mp**
     if (packetsToSend > 0)
     {
         double packetIntervalMs = rateMbps > 1000.0 ? 0.1 : 1.0;
@@ -244,7 +240,6 @@ SendAggregateVideoFrame(Ptr<AggregatePathNadaClient> client,
         totalPacketsSent += packetsToSend;
     }
 
-    // **ALIGNED: Same acknowledgment processing as strategy-mp**
     WebRtcFrameStats* statsPtr = &stats;
     Time ackDelay = rateMbps > 1000.0 ? MilliSeconds(10) : MilliSeconds(50);
 
@@ -256,7 +251,6 @@ SendAggregateVideoFrame(Ptr<AggregatePathNadaClient> client,
 
     frameCount++;
 
-    // **ALIGNED: Same frame scheduling logic as strategy-mp**
     Time nextInterval = frameInterval;
     if (rateMbps > 1000.0)
     {
@@ -273,7 +267,6 @@ SendAggregateVideoFrame(Ptr<AggregatePathNadaClient> client,
     NS_LOG_INFO("AGG: Frame " << frameCount << " (" << (isKeyFrame ? "KEY" : "DELTA")
                 << ") scheduled - next in " << jitteredInterval.GetMilliSeconds() << "ms");
 
-    // **ALIGNED: Same stopping condition as strategy-mp**
     if (totalPacketsSent < maxPackets)
     {
         frameEvent = Simulator::Schedule(jitteredInterval,
@@ -297,10 +290,8 @@ SendAggregateVideoFrame(Ptr<AggregatePathNadaClient> client,
 int
 main(int argc, char* argv[])
 {
-    // Simulation parameters - matching tcp-simple-nada-webrtc
     uint32_t packetSize = 1000;
     std::string bottleneckBw = "500kbps";
-    // Agg-path specific parameters
     std::string dataRate1 = "10Mbps";
     std::string dataRate2 = "5Mbps";
     uint32_t delayMs1 = 20;
@@ -316,7 +307,7 @@ main(int argc, char* argv[])
     uint32_t queueSize = 100;
     std::string queueDisc = "CoDel";
     bool enableAQM = false;
-    bool enableAqm = false; // Alternative spelling
+    bool enableAqm = false; 
     uint32_t maxTotalPackets = 10000;
 
     uint32_t numCompetingSourcesPathA = 2;
@@ -324,20 +315,16 @@ main(int argc, char* argv[])
     double competingIntensityA = 0.5;
     double competingIntensityB = 0.5;
 
-    // Path selection and buffer parameters (for compatibility)
     uint32_t pathSelectionStrategy = 0;
     double targetBufferLength = 3.0;
     double bufferWeightFactor = 0.3;
     bool enableLogging = false;
 
-    // Parse command line arguments - matching tcp-simple-nada-webrtc exactly
     CommandLine cmd;
 
-    // Basic parameters
     cmd.AddValue("packetSize", "Size of packets to send", packetSize);
     cmd.AddValue("bottleneckBw", "Bottleneck link bandwidth", bottleneckBw);
 
-    // Agg-path parameters
     cmd.AddValue("dataRate1", "Data rate of first path", dataRate1);
     cmd.AddValue("dataRate2", "Data rate of second path", dataRate2);
     cmd.AddValue("delayMs1", "Link delay of first path in milliseconds", delayMs1);
@@ -346,7 +333,6 @@ main(int argc, char* argv[])
                  "Path selection strategy (ignored in agg-path)",
                  pathSelectionStrategy);
 
-    // Simulation parameters
     cmd.AddValue("simulationTime", "Simulation time in seconds", simulationTime);
     cmd.AddValue("maxPackets", "Maximum number of packets to send", maxPackets);
     cmd.AddValue("webrtc", "Enable WebRTC-like traffic pattern", enableWebRTC);
@@ -356,7 +342,6 @@ main(int argc, char* argv[])
     cmd.AddValue("logDetails", "Enable detailed logging", logDetails);
     cmd.AddValue("enableLogging", "Enable detailed logging", enableLogging);
 
-    // Queue parameters
     cmd.AddValue("queueSize", "Queue size in packets", queueSize);
     cmd.AddValue("queueDisc", "Queue discipline (CoDel, PfifoFast, PIE)", queueDisc);
     cmd.AddValue("enableAQM", "Enable Active Queue Management", enableAQM);
@@ -378,7 +363,6 @@ main(int argc, char* argv[])
                  "Traffic intensity of competing sources on path B (0-1)",
                  competingIntensityB);
 
-    // Buffer parameters (for compatibility)
     cmd.AddValue("targetBufferLength",
                  "Target buffer length in seconds for buffer-aware strategy",
                  targetBufferLength);
@@ -388,11 +372,9 @@ main(int argc, char* argv[])
 
     cmd.Parse(argc, argv);
 
-    // Merge logging flags
     enableLogging = enableLogging || logDetails || logNada;
     enableAQM = enableAQM || enableAqm;
 
-    // Configure logging
     Time::SetResolution(Time::NS);
     LogComponentEnable("AggregatePathNadaSimulation", LOG_LEVEL_INFO);
 
@@ -402,14 +384,12 @@ main(int argc, char* argv[])
         LogComponentEnable("NadaCongestionControl", LOG_LEVEL_INFO);
     }
 
-    // Configure default TCP settings
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::TcpNewReno"));
     Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(packetSize));
     Config::SetDefault("ns3::TcpSocketBase::WindowScaling", BooleanValue(true));
     Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(1 << 20));
     Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(1 << 20));
 
-    // Configure queue settings
     Config::SetDefault("ns3::PointToPointNetDevice::TxQueue",
                        StringValue("ns3::DropTailQueue<Packet>"));
     Config::SetDefault("ns3::DropTailQueue<Packet>::MaxSize",
@@ -424,7 +404,6 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Competing sources - Path A: " << numCompetingSourcesPathA
                                                << ", Path B: " << numCompetingSourcesPathB);
 
-    // Create nodes
     NodeContainer source;
     source.Create(1);
 
@@ -437,7 +416,6 @@ main(int argc, char* argv[])
     NodeContainer destination;
     destination.Create(1);
 
-    // Create competing source nodes
     NodeContainer competingSourcesA;
     competingSourcesA.Create(numCompetingSourcesPathA);
 
@@ -447,24 +425,20 @@ main(int argc, char* argv[])
     DataRate rate1(dataRate1);
     DataRate rate2(dataRate2);
     if (rate1.GetBitRate() >= 1e9 || rate2.GetBitRate() >= 1e9)
-    { // 1Gbps+
         NS_LOG_INFO("Applying high-speed optimizations for " << dataRate1);
 
-        // Reduce logging overhead
         LogComponentDisableAll(LOG_PREFIX_TIME);
         LogComponentDisableAll(LOG_PREFIX_FUNC);
 
-        // Optimize packet size for high-speed links
         if (packetSize < 1500)
         {
             packetSize = 1500;
             NS_LOG_INFO("Increased packet size to " << packetSize << " for efficiency");
         }
 
-        // Reduce queue size to prevent excessive buffering
         queueSize = std::min(queueSize, 200u);
 
-        // For redundant transmission, reduce max packets significantly
+         For redundant transmission, reduce max packets significantly
         if (pathSelectionStrategy == 3)
         {
             maxPackets = std::min(maxPackets, 10000u);
@@ -472,7 +446,6 @@ main(int argc, char* argv[])
         }
     }
 
-    // Create point-to-point links
     PointToPointHelper p2p1;
     p2p1.SetDeviceAttribute("DataRate", StringValue(dataRate1));
     p2p1.SetChannelAttribute("Delay", TimeValue(MilliSeconds(delayMs1)));
@@ -481,30 +454,24 @@ main(int argc, char* argv[])
     p2p2.SetDeviceAttribute("DataRate", StringValue(dataRate2));
     p2p2.SetChannelAttribute("Delay", TimeValue(MilliSeconds(delayMs2)));
 
-    // Install devices
-    // Path 1: Source -> Router1 -> Destination
     NetDeviceContainer devSourceRouter1 = p2p1.Install(source.Get(0), router1.Get(0));
     NetDeviceContainer devRouter1Dest = p2p1.Install(router1.Get(0), destination.Get(0));
 
-    // Path 2: Source -> Router2 -> Destination
     NetDeviceContainer devSourceRouter2 = p2p2.Install(source.Get(0), router2.Get(0));
     NetDeviceContainer devRouter2Dest = p2p2.Install(router2.Get(0), destination.Get(0));
 
-    // Competing sources on Path A (connect to Router1)
     std::vector<NetDeviceContainer> devCompetingA(numCompetingSourcesPathA);
     for (uint32_t i = 0; i < numCompetingSourcesPathA; i++)
     {
         devCompetingA[i] = p2p1.Install(competingSourcesA.Get(i), router1.Get(0));
     }
 
-    // Competing sources on Path B (connect to Router2)
     std::vector<NetDeviceContainer> devCompetingB(numCompetingSourcesPathB);
     for (uint32_t i = 0; i < numCompetingSourcesPathB; i++)
     {
         devCompetingB[i] = p2p2.Install(competingSourcesB.Get(i), router2.Get(0));
     }
 
-    // Install internet stack
     InternetStackHelper internet;
     internet.Install(source);
     internet.Install(router1);
@@ -513,24 +480,20 @@ main(int argc, char* argv[])
     internet.Install(competingSourcesA);
     internet.Install(competingSourcesB);
 
-    // Assign IP addresses
     Ipv4AddressHelper ipv4;
 
-    // Path 1 addressing
     ipv4.SetBase("10.1.1.0", "255.255.255.0");
     Ipv4InterfaceContainer ifcSourceRouter1 = ipv4.Assign(devSourceRouter1);
 
     ipv4.SetBase("10.1.2.0", "255.255.255.0");
     Ipv4InterfaceContainer ifcRouter1Dest = ipv4.Assign(devRouter1Dest);
 
-    // Path 2 addressing
     ipv4.SetBase("10.2.1.0", "255.255.255.0");
     Ipv4InterfaceContainer ifcSourceRouter2 = ipv4.Assign(devSourceRouter2);
 
     ipv4.SetBase("10.2.2.0", "255.255.255.0");
     Ipv4InterfaceContainer ifcRouter2Dest = ipv4.Assign(devRouter2Dest);
 
-    // Competing sources addressing
     std::vector<Ipv4InterfaceContainer> ifcCompetingA(numCompetingSourcesPathA);
     for (uint32_t i = 0; i < numCompetingSourcesPathA; i++)
     {
@@ -549,7 +512,6 @@ main(int argc, char* argv[])
         ifcCompetingB[i] = ipv4.Assign(devCompetingB[i]);
     }
 
-    // Configure AQM if enabled
     if (enableAQM)
     {
         NS_LOG_INFO("Configuring " << queueDisc << " queue discipline");
@@ -575,18 +537,16 @@ main(int argc, char* argv[])
             tch.SetRootQueueDisc("ns3::PfifoFastQueueDisc");
         }
 
-        // Install on bottleneck links (router to destination)
         QueueDiscContainer qdiscs;
-        qdiscs.Add(tch.Install(router1.Get(0)->GetDevice(1))); // Router1 -> Destination
-        qdiscs.Add(tch.Install(router2.Get(0)->GetDevice(1))); // Router2 -> Destination
+        qdiscs.Add(tch.Install(router1.Get(0)->GetDevice(1))); 
+        qdiscs.Add(tch.Install(router2.Get(0)->GetDevice(1))); 
 
         NS_LOG_INFO("Installed queue discipline on " << qdiscs.GetN() << " devices");
     }
 
-    // Set up routing
+
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
-    // Create agg-path NADA client
     AggregatePathNadaClientHelper clientHelper;
     clientHelper.SetAttribute("PacketSize", UintegerValue(packetSize));
     clientHelper.SetAttribute("MaxPackets", UintegerValue(maxPackets));
@@ -600,16 +560,14 @@ main(int argc, char* argv[])
         return 1;
     }
 
-    // Add both paths to the client
+
     uint16_t port = 9;
 
-    // Path 1: Source -> Router1 -> Destination
-    InetSocketAddress localAddr1(ifcSourceRouter1.GetAddress(0), 0); // Any port
+    InetSocketAddress localAddr1(ifcSourceRouter1.GetAddress(0), 0);  Any port
     InetSocketAddress remoteAddr1(ifcRouter1Dest.GetAddress(1), port);
     bool path1Added = aggClient->AddPath(1, localAddr1, remoteAddr1);
 
-    // Path 2: Source -> Router2 -> Destination
-    InetSocketAddress localAddr2(ifcSourceRouter2.GetAddress(0), 0); // Any port
+    InetSocketAddress localAddr2(ifcSourceRouter2.GetAddress(0), 0);  Any port
     InetSocketAddress remoteAddr2(ifcRouter2Dest.GetAddress(1), port);
     bool path2Added = aggClient->AddPath(2, localAddr2, remoteAddr2);
 
@@ -628,12 +586,10 @@ main(int argc, char* argv[])
                 << path1Cap.GetBitRate() / 1000000.0 << "Mbps, "
                 << path2Cap.GetBitRate() / 1000000.0 << "Mbps");
 
-    // Create video receiver at destination (matching tcp-simple-webrtc format)
     VideoReceiverHelper videoReceiver(port);
     videoReceiver.SetAttribute("FrameRate", UintegerValue(frameRate));
     ApplicationContainer serverApp = videoReceiver.Install(destination.Get(0));
 
-    // Create TCP packet sinks for competing traffic
     uint16_t tcpPortA = 50000;
     uint16_t tcpPortB = 50001;
 
@@ -657,7 +613,6 @@ main(int argc, char* argv[])
         return 1;
     }
 
-    // Start applications
     serverApp.Start(Seconds(0.1));
     serverApp.Stop(Seconds(simulationTime));
     tcpSinkAppA.Start(Seconds(0.5));
@@ -683,21 +638,18 @@ main(int argc, char* argv[])
         }
     });
 
-    // Create competing TCP sources on Path A
     std::vector<ApplicationContainer> competingAppsA(numCompetingSourcesPathA);
     for (uint32_t i = 0; i < numCompetingSourcesPathA; i++)
     {
         BulkSendHelper source("ns3::TcpSocketFactory",
                               InetSocketAddress(ifcRouter1Dest.GetAddress(1), tcpPortA));
 
-        // Calculate max bytes based on intensity
-        uint32_t maxBytes = static_cast<uint32_t>(competingIntensityA * 10000000); // 10MB base
+        uint32_t maxBytes = static_cast<uint32_t>(competingIntensityA * 10000000);  10MB base
         source.SetAttribute("MaxBytes", UintegerValue(maxBytes));
         source.SetAttribute("SendSize", UintegerValue(packetSize));
 
         competingAppsA[i] = source.Install(competingSourcesA.Get(i));
 
-        // Staggered start times
         double startTime = 2.0 + i * 1.1 + AddJitter(0.0, 0.1);
         double stopTime = simulationTime - 2.0 - i * 1.0;
 
@@ -708,21 +660,17 @@ main(int argc, char* argv[])
                                           << stopTime << "s");
     }
 
-    // Create competing TCP sources on Path B
     std::vector<ApplicationContainer> competingAppsB(numCompetingSourcesPathB);
     for (uint32_t i = 0; i < numCompetingSourcesPathB; i++)
     {
         BulkSendHelper source("ns3::TcpSocketFactory",
                               InetSocketAddress(ifcRouter2Dest.GetAddress(1), tcpPortB));
 
-        // Calculate max bytes based on intensity
-        uint32_t maxBytes = static_cast<uint32_t>(competingIntensityB * 10000000); // 10MB base
         source.SetAttribute("MaxBytes", UintegerValue(maxBytes));
         source.SetAttribute("SendSize", UintegerValue(packetSize));
 
         competingAppsB[i] = source.Install(competingSourcesB.Get(i));
 
-        // Staggered start times (offset from Path A)
         double startTime = 7.0 + i * 2.5 + AddJitter(0.0, 0.1);
         double stopTime = simulationTime - 3.0 - i * 0.5;
 
@@ -755,23 +703,19 @@ main(int argc, char* argv[])
     NS_LOG_INFO("  Key frame interval: " << keyFrameInterval << " frames");
 
 
-    // Set up flow monitor
     FlowMonitorHelper flowHelper;
     Ptr<FlowMonitor> flowMonitor = flowHelper.InstallAll();
 
-    // Run simulation
     Simulator::Stop(Seconds(simulationTime));
 
     NS_LOG_INFO("Running simulation for " << simulationTime << " seconds...");
     Simulator::Run();
 
-    // Process flow monitor statistics
     flowMonitor->CheckForLostPackets();
     Ptr<Ipv4FlowClassifier> classifier =
         DynamicCast<Ipv4FlowClassifier>(flowHelper.GetClassifier());
     std::map<FlowId, FlowMonitor::FlowStats> stats = flowMonitor->GetFlowStats();
 
-    // Print results in tcp-simple-webrtc format
     std::cout << "\n=== SIMULATION RESULTS ===\n";
     std::cout << "Simulation time: " << simulationTime << " seconds\n";
     std::cout << "WebRTC mode: " << (enableWebRTC ? "enabled" : "disabled") << "\n";
@@ -787,7 +731,6 @@ main(int argc, char* argv[])
     std::cout << "Queue discipline: " << queueDisc << "\n";
     std::cout << "Queue size: " << queueSize << " packets\n\n";
 
-    // Track totals for summary
     uint32_t totalTxPackets = 0;
     uint32_t totalRxPackets = 0;
     uint64_t totalTxBytes = 0;
@@ -809,11 +752,9 @@ main(int argc, char* argv[])
     {
         Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(i->first);
 
-        // Check if this is the NADA agg-path flow (from source)
         bool isNadaFlow = (t.sourceAddress == ifcSourceRouter1.GetAddress(0) ||
                            t.sourceAddress == ifcSourceRouter2.GetAddress(0));
 
-        // Skip small flows (likely ACKs)
         if (i->second.txPackets < 10)
         {
             continue;
@@ -832,13 +773,11 @@ main(int argc, char* argv[])
         std::cout << "  Tx Bytes: " << i->second.txBytes << "\n";
         std::cout << "  Rx Bytes: " << i->second.rxBytes << "\n";
 
-        // Track overall statistics
         totalTxPackets += i->second.txPackets;
         totalRxPackets += i->second.rxPackets;
         totalTxBytes += i->second.txBytes;
         totalRxBytes += i->second.rxBytes;
 
-        // Track per-protocol statistics
         if (isNadaFlow)
         {
             nadaTxPackets += i->second.txPackets;
@@ -848,7 +787,6 @@ main(int argc, char* argv[])
         }
         else
         {
-            // Must be TCP competing flow
             tcpTxPackets += i->second.txPackets;
             tcpRxPackets += i->second.rxPackets;
             tcpTxBytes += i->second.txBytes;
@@ -906,7 +844,6 @@ main(int argc, char* argv[])
                   << "%\n\n";
     }
 
-    // Print NADA/WebRTC specific statistics
     std::cout << "=== NADA/WebRTC STATISTICS ===\n";
     std::cout << "NADA Tx Packets: " << nadaTxPackets << "\n";
     std::cout << "NADA Rx Packets: " << nadaRxPackets << "\n";
@@ -922,7 +859,6 @@ main(int argc, char* argv[])
         std::cout << "NADA efficiency: " << 100.0 * nadaRxBytes / nadaTxBytes << "%\n";
     }
 
-    // Print TCP specific statistics
     std::cout << "\n=== TCP COMPETING FLOWS STATISTICS ===\n";
     std::cout << "TCP Tx Packets: " << tcpTxPackets << "\n";
     std::cout << "TCP Rx Packets: " << tcpRxPackets << "\n";
@@ -938,7 +874,6 @@ main(int argc, char* argv[])
         std::cout << "TCP efficiency: " << 100.0 * tcpRxBytes / tcpTxBytes << "%\n";
     }
 
-    // Print video receiver statistics (matching tcp-simple-webrtc format)
     Ptr<VideoReceiver> videoReceiverApp = DynamicCast<VideoReceiver>(serverApp.Get(0));
     if (videoReceiverApp)
     {

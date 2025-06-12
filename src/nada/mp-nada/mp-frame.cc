@@ -33,7 +33,6 @@ MultiPathNadaFrameAwareClient::UpdateWeights()
 {
     NS_LOG_FUNCTION(this);
 
-    // **FRAME_AWARE STRATEGY: Optimize weights for video frame characteristics**
 
     // For frame-aware strategy, we maintain two sets of weights:
     // 1. Reliability weights (for key frames) - favor low RTT and high reliability
@@ -134,7 +133,6 @@ MultiPathNadaFrameAwareClient::Send(Ptr<Packet> packet)
         return false;
     }
 
-    // **FRAME_AWARE: Use current frame type to select optimal path**
     uint32_t selectedPath = GetFrameAwarePath(readyPaths, m_isKeyFrame);
 
     if (!packet)
@@ -172,7 +170,6 @@ MultiPathNadaFrameAwareClient::GetFrameAwarePath(const std::vector<uint32_t>& re
 
     if (isKeyFrame)
     {
-        // **KEY FRAME: Prioritize reliability (lowest RTT, highest success rate)**
         NS_LOG_INFO("FRAME_AWARE - Key frame: selecting most reliable path");
 
         uint32_t bestPathId = readyPaths[0];
@@ -209,7 +206,6 @@ MultiPathNadaFrameAwareClient::GetFrameAwarePath(const std::vector<uint32_t>& re
     }
     else
     {
-        // **DELTA FRAME: Use weighted distribution for load balancing**
         NS_LOG_DEBUG("FRAME_AWARE - Delta frame: using weighted distribution");
         return GetWeightedPath(readyPaths);
     }

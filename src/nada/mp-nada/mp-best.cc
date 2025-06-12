@@ -33,7 +33,6 @@ MultiPathNadaBestPathClient::UpdateWeights()
 {
     NS_LOG_FUNCTION(this);
 
-    // **BEST_PATH STRATEGY: Find best path and give it higher weight**
     uint32_t bestPath = FindBestPath();
 
     // Calculate quality for logging
@@ -79,7 +78,6 @@ MultiPathNadaBestPathClient::Send(Ptr<Packet> packet)
         return false;
     }
 
-    // **PERFORMANCE: Only recalculate best path occasionally**
     if (++m_bestPathReCheckCounter >= RECHECK_INTERVAL)
     {
         m_bestPathId = FindBestPath();
@@ -92,7 +90,6 @@ MultiPathNadaBestPathClient::Send(Ptr<Packet> packet)
         packet = Create<Packet>(m_packetSize);
     }
 
-    // **DIRECT send to best path**
     bool sent = SendPacketOnPath(m_bestPathId, packet);
     if (sent)
     {

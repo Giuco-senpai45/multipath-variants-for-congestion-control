@@ -193,13 +193,11 @@ MultiPathNadaClientBase::SetKeyFrameStatus(bool isKeyFrame)
 bool
 MultiPathNadaClientBase::IsReady(void) const
 {
-    // **CRITICAL FIX: Simplified readiness check to prevent socket recreation**
     if (!m_running || m_paths.empty())
     {
         return false;
     }
 
-    // **SIMPLE: Just check if we have any client with a socket**
     for (const auto& pathPair : m_paths)
     {
         if (pathPair.second.client && pathPair.second.client->GetSocket())
@@ -268,7 +266,6 @@ MultiPathNadaClientBase::SendPacketOnPath(uint32_t pathId, Ptr<Packet> packet)
         return false;
     }
 
-    // **CRITICAL: Remove any socket reinitialization triggers**
     // Just try to send - don't recreate sockets on failure
 
     try
@@ -295,7 +292,6 @@ MultiPathNadaClientBase::SendPacketOnPath(uint32_t pathId, Ptr<Packet> packet)
         }
         else
         {
-            // **IMPORTANT: Don't recreate socket on send failure**
             NS_LOG_DEBUG("Send failed for path " << pathId << ", but keeping socket");
             return false;
         }
@@ -303,7 +299,6 @@ MultiPathNadaClientBase::SendPacketOnPath(uint32_t pathId, Ptr<Packet> packet)
     catch (const std::exception& e)
     {
         NS_LOG_DEBUG("Exception in SendPacketOnPath for path " << pathId << ": " << e.what());
-        // **IMPORTANT: Don't recreate socket on exception**
         return false;
     }
 }
@@ -343,7 +338,6 @@ MultiPathNadaClientBase::SendVideoFrame(uint32_t frameId,
         return false;
     }
 
-    // **CRITICAL: Use EXACT same frame structure as AggregatePathNadaClient**
     uint32_t numPacketsNeeded = (frameSize + mtu - 1) / mtu;
 
     NS_LOG_INFO("MP: Sending " << (isKeyFrame ? "key" : "delta")
@@ -357,12 +351,10 @@ MultiPathNadaClientBase::SendVideoFrame(uint32_t frameId,
 
     uint32_t packetsSent = 0;
 
-    // **IDENTICAL: Send all packets for this frame using strategy-specific Send()**
     for (uint32_t i = 0; i < numPacketsNeeded; i++)
     {
         Ptr<Packet> packet = Create<Packet>(mtu);
 
-        // **CRITICAL: Use the strategy-specific Send() method**
         bool sent = Send(packet);
         if (sent)
         {
@@ -397,7 +389,6 @@ MultiPathNadaClientBase::Send(Ptr<Packet> packet)
         return false;
     }
 
-    // **DEFAULT: Round-robin implementation for base class**
     std::vector<uint32_t> availablePaths;
     for (const auto& pathPair : m_paths)
     {
@@ -439,7 +430,6 @@ MultiPathNadaClientBase::ValidateAllSockets(void)
 {
     NS_LOG_FUNCTION(this);
 
-    // **CRITICAL FIX: Only validate once, then trust the sockets**
     static bool hasValidated = false;
     if (hasValidated)
     {
@@ -460,7 +450,6 @@ MultiPathNadaClientBase::ValidateAllSockets(void)
             Ptr<Socket> socket = pathPair.second.client->GetSocket();
             if (socket)
             {
-                // **SIMPLIFIED: Just check if socket exists**
                 readyCount++;
                 NS_LOG_DEBUG("Path " << pathId << " socket exists");
             }
@@ -472,7 +461,6 @@ MultiPathNadaClientBase::ValidateAllSockets(void)
         hasValidated = true;
         NS_LOG_INFO("All sockets validated successfully - will not re-validate");
 
-        // **CRITICAL: Initialize NADA only once per path**
         for (auto& pathPair : m_paths)
         {
             uint32_t pathId = pathPair.first;
@@ -537,11 +525,10 @@ MultiPathNadaClientBase::StartApplication(void)
     Simulator::Schedule(MilliSeconds(delay + 500),
                         &MultiPathNadaClientBase::ValidateAllSockets, this);
 
-    // **REMOVE: Periodic health checks that cause socket recreation**
     // Simulator::Schedule(Seconds(5.0), &MultiPathNadaClientBase::PeriodicHealthCheck, this);
 
     // Schedule path distribution updates with much longer intervals
-    m_updateEvent = Simulator::Schedule(Seconds(10.0), // **MUCH longer interval**
+    m_updateEvent = Simulator::Schedule(Seconds(10.0),
                                        &MultiPathNadaClientBase::UpdatePathDistribution, this);
 }
 
@@ -643,7 +630,6 @@ MultiPathNadaClientBase::InitializePathSocket(uint32_t pathId)
 
     NS_LOG_INFO("Initializing socket for path " << pathId);
 
-    // **FIX: Create UDP socket properly**
     Ptr<Node> node = GetNode();
     if (!node)
     {
@@ -658,11 +644,9 @@ MultiPathNadaClientBase::InitializePathSocket(uint32_t pathId)
         return;
     }
 
-    // **CRITICAL FIX: Remove UDP-incompatible attributes**
     // UDP sockets don't have SndBufSize/RcvBufSize attributes
     // These are only available for TCP sockets
 
-    // **ALTERNATIVE: Set UDP-specific attributes if needed**
     try
     {
         // Set UDP socket to allow broadcast (optional)
@@ -679,12 +663,10 @@ MultiPathNadaClientBase::InitializePathSocket(uint32_t pathId)
         // Continue anyway - these are not critical for functionality
     }
 
-    // **CRITICAL FIX: Ensure unique ports for each path to avoid conflicts**
     if (InetSocketAddress::IsMatchingType(it->second.localAddress))
     {
         InetSocketAddress localAddr = InetSocketAddress::ConvertFrom(it->second.localAddress);
 
-        // **FIX: Always use path-specific ports to avoid conflicts**
         uint16_t basePort = localAddr.GetPort();
         if (basePort == 0) {
             basePort = 9000;
@@ -694,7 +676,6 @@ MultiPathNadaClientBase::InitializePathSocket(uint32_t pathId)
         uint16_t uniquePort = basePort + pathId;
         localAddr.SetPort(uniquePort);
 
-        // **ADD: Check if port is already in use by other paths**
         for (const auto& existingPath : m_paths)
         {
             if (existingPath.first != pathId && existingPath.second.client)
@@ -726,7 +707,6 @@ MultiPathNadaClientBase::InitializePathSocket(uint32_t pathId)
             NS_LOG_ERROR("Failed to bind socket for path " << pathId << " to port " << uniquePort
                         << ", error: " << bindResult);
 
-            // **TRY alternative ports**
             bool boundSuccessfully = false;
             for (uint16_t tryPort = uniquePort + 1; tryPort < uniquePort + 100; tryPort++)
             {
@@ -751,12 +731,10 @@ MultiPathNadaClientBase::InitializePathSocket(uint32_t pathId)
         }
     }
 
-    // **CRITICAL FIX: Better connection handling**
     if (InetSocketAddress::IsMatchingType(it->second.remoteAddress))
     {
         InetSocketAddress remoteAddr = InetSocketAddress::ConvertFrom(it->second.remoteAddress);
 
-        // **ADD: Verify remote address is valid**
         if (remoteAddr.GetIpv4() == Ipv4Address::GetAny() || remoteAddr.GetPort() == 0)
         {
             NS_LOG_ERROR("Invalid remote address for path " << pathId << ": " << remoteAddr);
@@ -771,7 +749,6 @@ MultiPathNadaClientBase::InitializePathSocket(uint32_t pathId)
             return;
         }
 
-        // **ADD: Verify connection was established**
         Address peerAddr;
         if (socket->GetPeerName(peerAddr) != 0)
         {
@@ -782,19 +759,15 @@ MultiPathNadaClientBase::InitializePathSocket(uint32_t pathId)
         NS_LOG_INFO("Socket connected to " << remoteAddr);
     }
 
-    // **CRITICAL FIX: Set receive callback BEFORE storing socket**
     socket->SetRecvCallback(MakeCallback(&MultiPathNadaClientBase::HandleRecv, this));
 
-    // **ADD: Set additional callbacks for error handling**
     socket->SetCloseCallbacks(
         MakeCallback(&MultiPathNadaClientBase::HandleSocketClose, this),
         MakeCallback(&MultiPathNadaClientBase::HandleSocketError, this)
     );
 
-    // **CRITICAL FIX: Ensure UdpNadaClient properly receives the socket**
     it->second.client->SetSocket(socket);
 
-    // **ADD: Verify socket was set correctly**
     Ptr<Socket> verifySocket = it->second.client->GetSocket();
     if (!verifySocket || verifySocket != socket)
     {
@@ -802,13 +775,11 @@ MultiPathNadaClientBase::InitializePathSocket(uint32_t pathId)
         return;
     }
 
-    // **ADD: Configure the UdpNadaClient properly**
     it->second.client->SetNode(GetNode());
 
     // Store socket mapping AFTER verification
     m_socketToPathId[socket] = pathId;
 
-    // **CRITICAL FIX: Initialize NADA with socket - but only once**
     if (it->second.nada)
     {
         // Check if NADA is already initialized to avoid double initialization
@@ -824,7 +795,6 @@ MultiPathNadaClientBase::InitializePathSocket(uint32_t pathId)
             DataRate pathRate = it->second.currentRate;
             it->second.nada->SetInitialRate(pathRate);
 
-            // **ADD: Set video mode if enabled**
             if (m_videoMode)
             {
                 it->second.nada->SetVideoMode(true);
@@ -839,7 +809,6 @@ MultiPathNadaClientBase::InitializePathSocket(uint32_t pathId)
         }
     }
 
-    // **ADD: Final socket verification**
     if (!IsSocketReady(socket))
     {
         NS_LOG_WARN("Socket for path " << pathId << " not ready after initialization");
@@ -848,7 +817,6 @@ MultiPathNadaClientBase::InitializePathSocket(uint32_t pathId)
 
     NS_LOG_INFO("Path " << pathId << " socket initialized successfully");
 
-    // **ADD: Schedule a delayed verification to ensure socket remains stable**
     Simulator::Schedule(MilliSeconds(100),
                        &MultiPathNadaClientBase::ValidatePathSocket,
                        this,
@@ -991,7 +959,6 @@ MultiPathNadaClientBase::IsSocketReady(Ptr<Socket> socket) const
         return false;
     }
 
-    // **CRITICAL FIX: Cache socket status to reduce overhead**
     static std::map<Ptr<Socket>, std::pair<bool, Time>> socketStatusCache;
     static const Time CACHE_DURATION = MilliSeconds(100); // Cache for 100ms
 
@@ -1009,18 +976,14 @@ MultiPathNadaClientBase::IsSocketReady(Ptr<Socket> socket) const
 
     try
     {
-        // **SIMPLIFIED: Only check essential socket state**
         Socket::SocketErrno error = socket->GetErrno();
         bool isReady = (error == Socket::ERROR_NOTERROR);
 
-        // **OPTIONAL: Quick peer check only if error-free**
         if (isReady)
         {
             Address peerAddr;
             isReady = (socket->GetPeerName(peerAddr) == 0);
         }
-
-        // **CACHE: Store result to reduce future overhead**
         socketStatusCache[socket] = std::make_pair(isReady, now);
 
         return isReady;
@@ -1054,12 +1017,11 @@ MultiPathNadaClientBase::UpdatePathDistribution()
 
     UpdateWeights();
 
-    // **CRITICAL FIX: Much slower updates for high-speed links**
     Time nextUpdate;
     if (totalRateBps >= 10e9) { // 10Gbps+
-        nextUpdate = Seconds(5.0); // **Very slow updates for very high-speed**
+        nextUpdate = Seconds(5.0); 
     } else if (totalRateBps >= 1e9) { // 1Gbps+
-        nextUpdate = Seconds(3.0); // **Slow updates for high-speed**
+        nextUpdate = Seconds(3.0); 
     } else if (totalRateBps >= 100e6) { // 100Mbps+
         nextUpdate = Seconds(1.0);
     } else {

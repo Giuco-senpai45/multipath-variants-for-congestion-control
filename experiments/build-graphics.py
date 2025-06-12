@@ -306,13 +306,13 @@ def main():
             f.write(f"  {os.path.basename(chart)}\n")
 
     print(f"\n✅ COMPLETE! Generated {len(generated_charts)} enhanced charts")
-    print(f"📁 All files saved to: {os.path.abspath(output_dir)}")
-    print(f"📄 Summary report: {report_path}")
-    print(f"📊 Dashboard: {dashboard_path}")
+    print(f"All files saved to: {os.path.abspath(output_dir)}")
+    print(f"Summary report: {report_path}")
+    print(f"Dashboard: {dashboard_path}")
 
     # Print quick summary
-    print(f"\n📈 QUICK SUMMARY:")
-    print(f"🎯 Top performing metrics (by average improvement):")
+    print(f"\nQUICK SUMMARY:")
+    print(f"Top performing metrics (by average improvement):")
 
     top_metrics = sorted(summary_stats.items(),
                         key=lambda x: x[1]['avg_improvement'],

@@ -52,13 +52,11 @@ class Counter : public SimpleRefCount<Counter>
     {
     }
 
-    // **ADD: Thread-safe increment**
     void Increment()
     {
         count++;
     }
 
-    // **ADD: Safe getter**
     uint32_t GetCount() const
     {
         return count;
@@ -176,7 +174,7 @@ ProcessFrameAcknowledgment(WebRtcFrameStats* stats,
         uint32_t count = packetsSentCounter->GetCount();
         NS_LOG_DEBUG("Processing frame acknowledgment with " << count << " packets");
 
-        if (count > 0 && count < 1000000) // Sanity check to detect corruption
+        if (count > 0 && count < 1000000)
         {
             stats->RecordFrameAcked(isKeyFrame);
         }
@@ -203,7 +201,6 @@ ValidateClientSockets(Ptr<MultiPathNadaClient> client)
         return false;
     }
 
-    // **FIX: Lightweight validation only**
     static bool hasValidatedOnce = false;
     if (hasValidatedOnce)
     {
@@ -256,7 +253,6 @@ SendMultipathVideoFrame(Ptr<MultiPathNadaClientBase> client,
         return;
     }
 
-    // **ALIGNED: Use exact same frame logic as simple-nada**
     bool isKeyFrame = (frameCount % keyFrameInterval == 0);
     uint32_t currentFrameSize = isKeyFrame ? frameSize * 2 : frameSize;
     uint32_t mtu = 1500;
@@ -267,7 +263,6 @@ SendMultipathVideoFrame(Ptr<MultiPathNadaClientBase> client,
                 << " bytes, packets: " << numPacketsNeeded << ")"
                 << " using strategy: " << client->GetStrategyName());
 
-    // **ALIGNED: Configure video frame properties identically**
     client->SetVideoMode(true);
     client->SetKeyFrameStatus(isKeyFrame);
     client->SetPacketSize(mtu);
@@ -280,7 +275,6 @@ SendMultipathVideoFrame(Ptr<MultiPathNadaClientBase> client,
 
     uint32_t packetsToSend = std::min(numPacketsNeeded, maxPackets - totalPacketsSent);
 
-    // **ALIGNED: Use same transmission pattern as simple-nada**
     if (packetsToSend > 0)
     {
         double packetIntervalMs = rateMbps > 1000.0 ? 0.1 : 1.0;
@@ -289,7 +283,6 @@ SendMultipathVideoFrame(Ptr<MultiPathNadaClientBase> client,
         {
             Time packetDelay = MilliSeconds(i * packetIntervalMs);
 
-            // **ALIGNED: Same lambda capture pattern as simple-nada**
             Simulator::Schedule(packetDelay, [client, mtu, packetsSentCounter, isKeyFrame]() {
                 Ptr<Packet> packet = Create<Packet>(mtu);
                 client->SetKeyFrameStatus(isKeyFrame);
@@ -302,11 +295,9 @@ SendMultipathVideoFrame(Ptr<MultiPathNadaClientBase> client,
             });
         }
 
-        // **ALIGNED: Update totalPacketsSent immediately**
         totalPacketsSent += packetsToSend;
     }
 
-    // **ALIGNED: Same acknowledgment processing as simple-nada**
     WebRtcFrameStats* statsPtr = &stats;
     Time ackDelay = rateMbps > 1000.0 ? MilliSeconds(10) : MilliSeconds(50);
 
@@ -318,7 +309,6 @@ SendMultipathVideoFrame(Ptr<MultiPathNadaClientBase> client,
 
     frameCount++;
 
-    // **ALIGNED: Same frame scheduling logic as simple-nada**
     Time nextInterval = frameInterval;
     if (rateMbps > 1000.0)
     {
@@ -336,7 +326,6 @@ SendMultipathVideoFrame(Ptr<MultiPathNadaClientBase> client,
                 << ") scheduled - next in " << jitteredInterval.GetMilliSeconds() << "ms"
                 << " (Strategy: " << client->GetStrategyName() << ")");
 
-    // **ALIGNED: Same stopping condition as simple-nada**
     if (totalPacketsSent < maxPackets)
     {
         frameEvent = Simulator::Schedule(jitteredInterval,
@@ -639,7 +628,6 @@ main(int argc, char* argv[])
     // Set up routing
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
-    // **NEW: Use factory to create strategy-specific client**
     NS_LOG_INFO("Creating MultiPathNadaClient with strategy " << pathSelectionStrategy);
 
     MultiPathNadaClientFactory::StrategyType strategyType =
@@ -656,18 +644,15 @@ main(int argc, char* argv[])
 
     NS_LOG_INFO("Created " << mpClient->GetStrategyName() << " strategy client successfully");
 
-    // **UPDATED: Configure client (same interface)**
     mpClient->SetPacketSize(packetSize);
     mpClient->SetMaxPackets(maxPackets);
 
     NS_LOG_INFO("Creating server application at destination");
-    // **SAME: Video receiver setup**
     uint16_t videoPort = 9;
     VideoReceiverHelper server(videoPort);
     server.SetAttribute("FrameRate", UintegerValue(frameRate));
     ApplicationContainer serverApp = server.Install(destination.Get(0));
 
-    // **NEW: Strategy-specific configuration**
     if (pathSelectionStrategy == 5) // BUFFER_AWARE
     {
         Ptr<VideoReceiver> videoReceiver = DynamicCast<VideoReceiver>(serverApp.Get(0));
@@ -689,9 +674,7 @@ main(int argc, char* argv[])
     if (isHighSpeed)
     {
         NS_LOG_INFO("High-speed link detected - reducing logging overhead");
-        logDetails = false; // **Force disable detailed logging**
 
-        // **Disable time prefixes to reduce logging overhead**
         LogComponentDisableAll(LOG_PREFIX_TIME);
         LogComponentDisableAll(LOG_PREFIX_FUNC);
         LogComponentDisableAll(LOG_PREFIX_NODE);
@@ -798,7 +781,6 @@ main(int argc, char* argv[])
     }
 
     NS_LOG_INFO("Setting up WebRTC video streaming");
-    // Set up WebRTC video streaming
     uint32_t frameCount = 0;
     Time frameInterval = Seconds(1.0 / frameRate);
     uint32_t totalPacketsSent = 0;
@@ -808,7 +790,6 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Starting applications");
     serverApp.Start(Seconds(0.1));
 
-    // **UPDATED: Install application (no helper needed)**
     Ptr<Node> sourceNode = source.Get(0);
     sourceNode->AddApplication(mpClient);
     mpClient->SetStartTime(Seconds(0.2));
@@ -826,7 +807,6 @@ main(int argc, char* argv[])
         NS_LOG_INFO("Client validation scheduled");
     });
 
-    // **UPDATED: Client readiness check (simplified)**
     Simulator::Schedule(Seconds(0.6), [mpClient]() {
         if (mpClient->IsReady())
         {
@@ -871,7 +851,6 @@ main(int argc, char* argv[])
         }
 
         // Status reporting - only for non-high-speed
-        for (int i = 0; i < 2; i++) // **Reduce from 10 to 2 reports**
         {
             Simulator::Schedule(Seconds(5.0 + i * 10),
                                 [mpClient]() { mpClient->ReportSocketStatus(); });
@@ -1010,10 +989,8 @@ main(int argc, char* argv[])
         std::cout << "\n";
     }
 
-    // Print aggregated statistics by source type
     std::cout << "\n=== AGGREGATED STATISTICS BY SOURCE TYPE ===\n";
 
-    // Helper function to print aggregated stats
     auto printAggStats = [](const std::string& sourceType,
                             const std::vector<std::pair<FlowId, FlowMonitor::FlowStats>>& flows,
                             double simulationTime) {
@@ -1087,11 +1064,9 @@ main(int argc, char* argv[])
     printAggStats("Path A Competing Sources", pathACompetingFlows, simulationTime);
     printAggStats("Path B Competing Sources", pathBCompetingFlows, simulationTime);
 
-    // Print frame statistics
     frameStats.PrintStats();
 
     NS_LOG_INFO("Collecting path statistics");
-    // **UPDATED: Path statistics reporting**
     std::cout << "\nPath Statistics (Strategy: " << mpClient->GetStrategyName() << "):\n";
     for (uint32_t pathId = 1; pathId <= mpClient->GetNumPaths(); pathId++)
     {
