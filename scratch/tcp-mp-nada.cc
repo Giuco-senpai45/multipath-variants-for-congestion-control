@@ -255,6 +255,18 @@ SendMultipathVideoFrame(Ptr<MultiPathNadaClient> client,
                            << " (size: " << currentFrameSize
                            << " bytes, packets needed: " << numPacketsNeeded << ")");
 
+    DataRate totalRate = client->GetTotalRate();
+    double rateMbps = totalRate.GetBitRate() / 1000000.0;
+
+    if (rateMbps < 1.0)
+    {
+        currentFrameSize *= 0.7; // Reduce quality for low rates
+    }
+    else if (rateMbps > 5.0)
+    {
+        currentFrameSize *= 1.2; // Increase quality for high rates
+    }
+
     // Configure video parameters
     client->SetVideoMode(true);
     client->SetKeyFrameStatus(isKeyFrame);
@@ -268,83 +280,37 @@ SendMultipathVideoFrame(Ptr<MultiPathNadaClient> client,
     Ptr<Counter> packetsSentCounter = Create<Counter>();
     packetsSentCounter->count = 0;
 
-    auto schedulePacket = [client, packetsSentCounter, mtu](Time delay) {
-        Simulator::Schedule(delay, [client, packetsSentCounter, mtu]() {
-            if (!client)
-            {
-                std::cout << "ERROR: Client pointer is null in scheduled packet send" << std::endl;
-                return;
-            }
-            // Create packet with error checking
-            Ptr<Packet> packet;
-            try
-            {
-                packet = Create<Packet>(mtu);
-                if (!packet)
-                {
-                    std::cout << "ERROR: Failed to create packet" << std::endl;
-                    return;
-                }
-            }
-            catch (const std::exception& e)
-            {
-                std::cout << "EXCEPTION creating packet: " << e.what() << std::endl;
-                return;
-            }
+    uint32_t packetsToSend = std::min(numPacketsNeeded, maxPackets - totalPacketsSent);
+    double packetIntervalMs = frameInterval.GetMilliSeconds() / packetsToSend;
+    packetIntervalMs = std::max(1.0, packetIntervalMs);
 
-            // Send using the client's Send method with extensive error handling
-            bool sent = false;
-            try
-            {
-                sent = client->Send(packet);
-            }
-            catch (const std::exception& e)
-            {
-                std::cout << "EXCEPTION in client->Send: " << e.what() << std::endl;
-                return;
-            }
-            catch (...)
-            {
-                std::cout << "UNKNOWN EXCEPTION in client->Send" << std::endl;
-                return;
-            }
+    for (uint32_t i = 0; i < packetsToSend; i++) {
+        Time packetDelay = MilliSeconds(i * packetIntervalMs);
 
-            if (sent)
-            {
-                // Use the shared counter to track sent packets safely
-                try
-                {
-                    if (packetsSentCounter)
-                    {
-                        packetsSentCounter->count++;
-                    }
-                    else
-                    {
-                        std::cout << "ERROR: packetsSentCounter is null" << std::endl;
-                    }
+        Simulator::Schedule(packetDelay, [client, packetsSentCounter, mtu, i, packetsToSend]() {
+            if (!client) return;
+
+            try {
+                Ptr<Packet> packet = Create<Packet>(mtu);
+                if (!packet) return;
+
+                bool sent = client->Send(packet);
+                if (sent && packetsSentCounter) {
+                    packetsSentCounter->count++;
+                    NS_LOG_DEBUG("Packet " << i+1 << "/" << packetsToSend << " sent successfully");
                 }
-                catch (const std::exception& e)
-                {
-                    std::cout << "EXCEPTION incrementing counter: " << e.what() << std::endl;
-                }
+            } catch (const std::exception& e) {
+                NS_LOG_ERROR("Exception sending packet: " << e.what());
             }
         });
-    };
 
-    uint32_t packetsToSend = std::min(numPacketsNeeded, maxPackets - totalPacketsSent);
-    for (uint32_t i = 0; i < packetsToSend; i++)
-    {
-        Time packetDelay = MicroSeconds(i * 500); // 0.5ms between packets
-        schedulePacket(packetDelay);
-
-        // Increment total packets counter - assume all will be sent successfully
         totalPacketsSent++;
     }
 
     WebRtcFrameStats* statsPtr = &stats;
 
     // Schedule frame acknowledgment using the shared counter and pointer to stats
-    Simulator::Schedule(MilliSeconds(100),
+    Simulator::Schedule(MilliSeconds(150),
                         &ProcessFrameAcknowledgment,
                         statsPtr,
                         isKeyFrame,
@@ -353,19 +319,20 @@ SendMultipathVideoFrame(Ptr<MultiPathNadaClient> client,
     // Increment frame counter
     frameCount++;
 
+    Time nextInterval = frameInterval;
+
+    // If we're experiencing issues, slow down frame rate slightly
+    if (rateMbps < 1.0) {
+        nextInterval = frameInterval * 1.2; // 20% slower frame rate
+    }
+
     // Schedule next frame
-    Time jitteredInterval = Seconds(AddJitter(frameInterval.GetSeconds(), 0.05));
+    Time jitteredInterval = Seconds(AddJitter(nextInterval.GetSeconds(), 0.02)); // Reduced jitter
     frameEvent = Simulator::Schedule(jitteredInterval,
                                      &SendMultipathVideoFrame,
-                                     client,
-                                     std::ref(frameCount),
-                                     keyFrameInterval,
-                                     frameSize,
-                                     std::ref(frameEvent),
-                                     frameInterval,
-                                     std::ref(stats),
-                                     std::ref(totalPacketsSent),
-                                     maxPackets);
+                                     client, std::ref(frameCount), keyFrameInterval,
+                                     frameSize, std::ref(frameEvent), frameInterval,
+                                     std::ref(stats), std::ref(totalPacketsSent), maxPackets);
 }
 
 int
@@ -373,11 +340,7 @@ main(int argc, char* argv[])
 {
     // Simulation parameters
     uint32_t packetSize = 1000;
-
-    // Fallbacks for single path cmd args
-    std::string dataRate = "1Mbps";
     std::string bottleneckBw = "500Mbps";
-    uint32_t delayMs = 10;
 
     // Multipath parameters
     std::string dataRate1 = "10Mbps";
@@ -389,10 +352,11 @@ main(int argc, char* argv[])
     uint32_t keyFrameInterval = 100;
     uint32_t frameRate = 15;
     bool logDetails = false;
-    uint32_t maxPackets = 10000;
+    uint32_t maxPackets = 1000;
     uint32_t queueSize = 100;
     std::string queueDisc = "CoDel";
-    uint32_t pathSelectionStrategy = 0; // 0=weighted, 1=best path, 2=equal
+    uint32_t pathSelectionStrategy =
+        0; // 0=weighted, 1=best path, 2=equal, 3=redundant, 4=frame-aware, 5=buffer-aware
 
     // Competing traffic parameters
     uint32_t numCompetingSourcesPathA = 2;
@@ -401,15 +365,14 @@ main(int argc, char* argv[])
     double competingIntensityB = 0.5; // Relative intensity of competing traffic on path B (0-1)
     bool enableAQM = false;           // Enable Active Queue Management
 
+    double targetBufferLength = 3.0;
+    double bufferWeightFactor = 0.3;
+
     // Parse command line arguments
     CommandLine cmd;
 
     // fallbacks
-    cmd.AddValue("dataRate", "Data rate of primary source (fallback for singlepath)", dataRate);
     cmd.AddValue("bottleneckBw", "Bandwidth for", bottleneckBw);
-    cmd.AddValue("delayMs", "Link delay in milliseconds", delayMs);
-
-
     cmd.AddValue("packetSize", "Size of packets to send", packetSize);
     cmd.AddValue("dataRate1", "Data rate of first path", dataRate1);
     cmd.AddValue("dataRate2", "Data rate of second path", dataRate2);
@@ -437,6 +400,12 @@ main(int argc, char* argv[])
                  "Traffic intensity of competing sources on path B (0-1)",
                  competingIntensityB);
     cmd.AddValue("enableAQM", "Enable Active Queue Management", enableAQM);
+    cmd.AddValue("targetBufferLength",
+                 "Target buffer length in seconds for buffer-aware strategy",
+                 targetBufferLength);
+    cmd.AddValue("bufferWeightFactor",
+                 "Buffer influence factor (0-1) for buffer-aware strategy",
+                 bufferWeightFactor);
     cmd.Parse(argc, argv);
 
     // Configure logging
@@ -739,8 +708,8 @@ main(int argc, char* argv[])
         ApplicationContainer app = competingTcpA.Install(competingSourcesA.Get(i));
 
         // Start competing sources at different times to avoid synchronization
-        app.Start(Seconds(5.0 + i * 2));           // Staggered start
-        app.Stop(Seconds(simulationTime - 2 - i)); // Staggered stop
+        app.Start(Seconds(0.5 + i * 0.5));           // Staggered start
+        app.Stop(Seconds(simulationTime - 1)); // Staggered stop
 
         competingAppsA.push_back(app);
         NS_LOG_INFO("TCP competing source A" << i << " connected to port " << tcpPort);
@@ -785,8 +754,8 @@ main(int argc, char* argv[])
         ApplicationContainer app = competingTcpB.Install(competingSourcesB.Get(i));
 
         // Start competing sources at different times to avoid synchronization
-        app.Start(Seconds(10.0 + i * 2));          // Staggered start later than path A
-        app.Stop(Seconds(simulationTime - 3 - i)); // Staggered stop
+        app.Start(Seconds(0.7 + i * 0.5));           // Staggered start later than path A
+        app.Stop(Seconds(simulationTime - 1)); // Staggered stop
 
         competingAppsB.push_back(app);
         NS_LOG_INFO("TCP competing source B" << i << " connected to port " << tcpPort);
@@ -801,16 +770,16 @@ main(int argc, char* argv[])
     EventId frameEvent;
 
     NS_LOG_INFO("Starting applications");
-    serverApp.Start(Seconds(0.5));
-    clientApp.Start(Seconds(2.0));
+    serverApp.Start(Seconds(0.1));
+    clientApp.Start(Seconds(0.2));
 
-    Simulator::Schedule(Seconds(1.0), &MultiPathNadaClient::InitializePathSocket, mpClient, 1);
-    Simulator::Schedule(Seconds(1.1), &MultiPathNadaClient::InitializePathSocket, mpClient, 2);
-    Simulator::Schedule(Seconds(2.5), &MultiPathNadaClient::ValidateAllSockets, mpClient);
+    Simulator::Schedule(Seconds(0.3), &MultiPathNadaClient::InitializePathSocket, mpClient, 1);
+    Simulator::Schedule(Seconds(0.3), &MultiPathNadaClient::InitializePathSocket, mpClient, 2);
+    Simulator::Schedule(Seconds(0.5), &MultiPathNadaClient::ValidateAllSockets, mpClient);
 
     NS_LOG_INFO("Scheduling client readiness check");
     int attempts = 0;
-    Simulator::Schedule(Seconds(1.0), [&, attempts]() {
+    Simulator::Schedule(Seconds(0.6), [&, attempts]() {
         // Use the captured attempts value from the outer lambda
         int nextAttempt = attempts + 1;
 
@@ -873,14 +842,14 @@ main(int argc, char* argv[])
 
     for (int i = 0; i < 10; i++)
     {
-        Simulator::Schedule(Seconds(3.0 + i * 2),
+        Simulator::Schedule(Seconds(1.0 + i * 5),
                             &MultiPathNadaClient::ReportSocketStatus,
                             mpClient);
     }
 
     NS_LOG_INFO("Giving applications time to initialize");
     // Allow more time for socket initialization
-    Time socketInitDelay = Seconds(15.0);
+    Time socketInitDelay = Seconds(1.0);
 
     NS_LOG_INFO("Scheduling first video frame with delay for initialization: "
                 << socketInitDelay.GetSeconds() << "s");
@@ -1075,6 +1044,21 @@ main(int argc, char* argv[])
                   << " ms\n";
     }
     std::cout << "\n";
+
+    if (pathSelectionStrategy == 5) // BUFFER_AWARE
+    {
+        mpClient->SetVideoReceiver(videoReceiverInstance);
+        mpClient->SetBufferAwareParameters(targetBufferLength, bufferWeightFactor);
+        NS_LOG_INFO("Configured buffer-aware strategy with target buffer: "
+                    << targetBufferLength << "s, weight factor: " << bufferWeightFactor);
+
+        Simulator::Schedule(Seconds(20.0), [videoReceiverInstance]() {
+            NS_LOG_INFO("Buffer status check:");
+            NS_LOG_INFO("  Buffer length: " << videoReceiverInstance->GetAverageBufferLength()
+                                            << "ms");
+            NS_LOG_INFO("  Buffer underruns: " << videoReceiverInstance->GetBufferUnderruns());
+        });
+    }
 
     printAggStats("WebRTC Source (Multipath)", mainSourceFlows, simulationTime);
     printAggStats("Path A Competing Sources", pathACompetingFlows, simulationTime);

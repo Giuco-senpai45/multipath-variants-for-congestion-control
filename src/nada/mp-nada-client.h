@@ -10,6 +10,7 @@
 #include "ns3/ptr.h"
 #include "ns3/random-variable-stream.h"
 #include "ns3/traced-callback.h"
+#include "ns3/video-receiver.h"
 
 #include <map>
 #include <vector>
@@ -33,6 +34,7 @@ class MultiPathNadaClient : public Application
         EQUAL = 2,       // Equal distribution (round-robin)
         REDUNDANT = 3,   // Redundant transmission on all paths
         FRAME_AWARE = 4, // Frame type aware (I-frames on best path)
+        BUFFER_AWARE = 5 // Buffer-aware path selection
     };
 
     /**
@@ -179,10 +181,15 @@ class MultiPathNadaClient : public Application
 
     void SetPathSelectionStrategy(uint32_t strategy);
     std::string GetStrategyName(uint32_t strategy) const;
+    void SetVideoReceiver(Ptr<VideoReceiver> receiver);
+    void SetBufferAwareParameters(double targetBufferLength, double bufferWeightFactor);
+    uint32_t GetBufferAwarePath(const std::vector<uint32_t>& readyPaths);
+    double CalculateBufferWeight(double currentBufferMs, uint32_t pathId);
+    uint32_t GetBestPathByRTT();
 
   protected:
     virtual void DoDispose(void);
-    bool IsSocketReady(Ptr<Socket> socket) const;
+    bool IsSocketReady(Ptr<Socket> socket);
     void ValidatePathSocket(uint32_t pathId);
 
     uint32_t GetBestPath(const std::vector<uint32_t>& readyPaths);
@@ -212,6 +219,10 @@ class MultiPathNadaClient : public Application
     Time m_lastUpdateTime;       // Time of last update
 
     bool m_videoMode; // Whether video mode is enabled
+
+    Ptr<VideoReceiver> m_videoReceiver;
+    double m_targetBufferLength;  // Target buffer length in seconds
+    double m_bufferWeightFactor;  // How much buffer status affects path selection
 };
 
 /**

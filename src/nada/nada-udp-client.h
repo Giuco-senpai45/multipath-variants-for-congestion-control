@@ -129,6 +129,30 @@ class UdpNadaClient : public Application
      */
     void HandleRead(Ptr<Socket> socket);
 
+    /**
+     * Set the packet size
+     * \param size The packet size in bytes
+     */
+    void SetPacketSize(uint32_t size);
+
+    /**
+     * Set the maximum number of packets to send
+     * \param maxPackets The maximum number of packets
+     */
+    void SetMaxPackets(uint32_t maxPackets);
+
+    /**
+     * Get the current packet size
+     * \return The packet size in bytes
+     */
+    uint32_t GetPacketSize() const;
+
+    /**
+     * Get the maximum number of packets
+     * \return The maximum number of packets
+     */
+    uint32_t GetMaxPackets() const;
+
   private:
     uint32_t m_packetSize;  // Size of each packet sent
     uint32_t m_numPackets;  // Number of packets to send

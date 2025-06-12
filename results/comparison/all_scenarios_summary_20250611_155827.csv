@@ -1,0 +1,501 @@
+Metric,Multipath-NADA,Aggregated-NADA,Improvement (%),Scenario
+Throughput (Mbps),14.57335981818182,6.435941034375,126.4371245843313,Legacy Broadband - Dynamic RTT Weights
+Delay (seconds),0.08354715625,0.088888,6.008509303843028,Legacy Broadband - Dynamic RTT Weights
+Loss (%),1.971221875e-05,0.02131439375,99.90751686873571,Legacy Broadband - Dynamic RTT Weights
+Jitter (seconds),0.00027361519043063437,0.00014054720423625,-94.67850101856628,Legacy Broadband - Dynamic RTT Weights
+Estimated MOS (1-5),4.645747348158929,4.630330618062984,0.33295095680219244,Legacy Broadband - Dynamic RTT Weights
+Throughput Stability (stddev),21.453503641997575,7.05413082164368,-204.12681851849612,Legacy Broadband - Dynamic RTT Weights
+Path Utilization Ratio (%),14.720565472910929,,,Legacy Broadband - Dynamic RTT Weights
+Delivery Efficiency (%),0.0,0.0,,Legacy Broadband - Dynamic RTT Weights
+Buffer Length (ms),268.746,258.868,3.815844368558488,Legacy Broadband - Dynamic RTT Weights
+Buffer Underruns,9.0,40.0,77.5,Legacy Broadband - Dynamic RTT Weights
+Throughput (Mbps),17.811884222222222,6.435941034375,176.75648560307155,Legacy Broadband - Weighted Best Path
+Delay (seconds),0.08418479333333333,0.088888,5.2911604116041175,Legacy Broadband - Weighted Best Path
+Loss (%),2.1026366666666666e-05,0.02131439375,99.90135132665142,Legacy Broadband - Weighted Best Path
+Jitter (seconds),0.00028947891312601,0.00014054720423625,-105.96561468374443,Legacy Broadband - Weighted Best Path
+Estimated MOS (1-5),4.6420482624585215,4.630330618062984,0.2530628018186672,Legacy Broadband - Weighted Best Path
+Throughput Stability (stddev),22.468928364382677,7.05413082164368,-218.52157172139317,Legacy Broadband - Weighted Best Path
+Path Utilization Ratio (%),17.99180224466891,,,Legacy Broadband - Weighted Best Path
+Delivery Efficiency (%),0.0,0.0,,Legacy Broadband - Weighted Best Path
+Buffer Length (ms),268.746,258.868,3.815844368558488,Legacy Broadband - Weighted Best Path
+Buffer Underruns,9.0,40.0,77.5,Legacy Broadband - Weighted Best Path
+Throughput (Mbps),16.027514573599998,6.435941034375,149.0314079634268,Legacy Broadband - Round Robin
+Delay (seconds),0.08160240625,0.088888,8.196374932499324,Legacy Broadband - Round Robin
+Loss (%),1.971221875e-05,0.02131439375,99.90751686873571,Legacy Broadband - Round Robin
+Jitter (seconds),3.178638105471625e-05,0.00014054720423625,77.38383966621949,Legacy Broadband - Round Robin
+Estimated MOS (1-5),4.6712513537009706,4.630330618062984,0.8837540774810866,Legacy Broadband - Round Robin
+Throughput Stability (stddev),22.140194552490744,7.05413082164368,-213.8614113103713,Legacy Broadband - Round Robin
+Path Utilization Ratio (%),16.189408660202016,,,Legacy Broadband - Round Robin
+Delivery Efficiency (%),0.0,0.0,,Legacy Broadband - Round Robin
+Buffer Length (ms),0.0,258.868,-100.0,Legacy Broadband - Round Robin
+Buffer Underruns,1.0,40.0,97.5,Legacy Broadband - Round Robin
+Throughput (Mbps),16.0275191064,6.435941034375,149.0314783929099,Legacy Broadband - Frame Aware
+Delay (seconds),0.08160240625,0.088888,8.196374932499324,Legacy Broadband - Frame Aware
+Loss (%),1.971221875e-05,0.02131439375,99.90751686873571,Legacy Broadband - Frame Aware
+Jitter (seconds),3.178638105471625e-05,0.00014054720423625,77.38383966621949,Legacy Broadband - Frame Aware
+Estimated MOS (1-5),4.6712513537009706,4.630330618062984,0.8837540774810866,Legacy Broadband - Frame Aware
+Throughput Stability (stddev),22.14019127241992,7.05413082164368,-213.861364811789,Legacy Broadband - Frame Aware
+Path Utilization Ratio (%),16.18941323878788,,,Legacy Broadband - Frame Aware
+Delivery Efficiency (%),0.0,0.0,,Legacy Broadband - Frame Aware
+Buffer Length (ms),0.0,258.868,-100.0,Legacy Broadband - Frame Aware
+Buffer Underruns,1.0,40.0,97.5,Legacy Broadband - Frame Aware
+Throughput (Mbps),16.027514573599998,6.435941034375,149.0314079634268,Legacy Broadband - Buffer_Aware
+Delay (seconds),0.08160240625,0.088888,8.196374932499324,Legacy Broadband - Buffer_Aware
+Loss (%),1.971221875e-05,0.02131439375,99.90751686873571,Legacy Broadband - Buffer_Aware
+Jitter (seconds),3.178638105471625e-05,0.00014054720423625,77.38383966621949,Legacy Broadband - Buffer_Aware
+Estimated MOS (1-5),4.6712513537009706,4.630330618062984,0.8837540774810866,Legacy Broadband - Buffer_Aware
+Throughput Stability (stddev),22.140194552490744,7.05413082164368,-213.8614113103713,Legacy Broadband - Buffer_Aware
+Path Utilization Ratio (%),16.189408660202016,,,Legacy Broadband - Buffer_Aware
+Delivery Efficiency (%),0.0,0.0,,Legacy Broadband - Buffer_Aware
+Buffer Length (ms),0.0,258.868,-100.0,Legacy Broadband - Buffer_Aware
+Buffer Underruns,1.0,40.0,97.5,Legacy Broadband - Buffer_Aware
+Throughput (Mbps),24.231548636363637,13.0863896125,85.16603397791155,Unbalanced Dual-WAN - Dynamic RTT Weights
+Delay (seconds),0.0880458025,0.089690055,1.8332606664139057,Unbalanced Dual-WAN - Dynamic RTT Weights
+Loss (%),0.0,0.0,,Unbalanced Dual-WAN - Dynamic RTT Weights
+Jitter (seconds),2.036207787710895e-05,5.0566413072975e-05,59.732010558622406,Unbalanced Dual-WAN - Dynamic RTT Weights
+Estimated MOS (1-5),4.646331247408812,4.637557291303735,0.1891934816962661,Unbalanced Dual-WAN - Dynamic RTT Weights
+Throughput Stability (stddev),39.53084828366708,16.984880420557644,-132.74139884918432,Unbalanced Dual-WAN - Dynamic RTT Weights
+Path Utilization Ratio (%),10.769577171717172,,,Unbalanced Dual-WAN - Dynamic RTT Weights
+Delivery Efficiency (%),0.0,0.0,,Unbalanced Dual-WAN - Dynamic RTT Weights
+Buffer Length (ms),336.125,473.368,-28.99287657805344,Unbalanced Dual-WAN - Dynamic RTT Weights
+Buffer Underruns,19.0,14.0,-35.714285714285715,Unbalanced Dual-WAN - Dynamic RTT Weights
+Throughput (Mbps),29.61633722222222,13.0863896125,126.31404152855853,Unbalanced Dual-WAN - Weighted Best Path
+Delay (seconds),0.09057047631578947,0.089690055,-0.9816264643716299,Unbalanced Dual-WAN - Weighted Best Path
+Loss (%),0.0,0.0,,Unbalanced Dual-WAN - Weighted Best Path
+Jitter (seconds),2.0898163554851525e-05,5.0566413072975e-05,58.67184899056947,Unbalanced Dual-WAN - Weighted Best Path
+Estimated MOS (1-5),4.636197662182637,4.637557291303735,-0.0293177859742621,Unbalanced Dual-WAN - Weighted Best Path
+Throughput Stability (stddev),41.838893630370684,16.984880420557644,-146.33022190566024,Unbalanced Dual-WAN - Weighted Best Path
+Path Utilization Ratio (%),13.162816543209876,,,Unbalanced Dual-WAN - Weighted Best Path
+Delivery Efficiency (%),0.0,0.0,,Unbalanced Dual-WAN - Weighted Best Path
+Buffer Length (ms),336.125,473.368,-28.99287657805344,Unbalanced Dual-WAN - Weighted Best Path
+Buffer Underruns,19.0,14.0,-35.714285714285715,Unbalanced Dual-WAN - Weighted Best Path
+Throughput (Mbps),29.467372540333333,13.0863896125,125.17572388480906,Unbalanced Dual-WAN - Round Robin
+Delay (seconds),0.08804351499999999,0.089690055,1.8358111164052868,Unbalanced Dual-WAN - Round Robin
+Loss (%),0.0,0.0,,Unbalanced Dual-WAN - Round Robin
+Jitter (seconds),1.790399037710805e-05,5.0566413072975e-05,64.59311766632551,Unbalanced Dual-WAN - Round Robin
+Estimated MOS (1-5),4.646519727189458,4.637557291303735,0.19325768551751893,Unbalanced Dual-WAN - Round Robin
+Throughput Stability (stddev),41.945366488068636,16.984880420557644,-146.95709036196732,Unbalanced Dual-WAN - Round Robin
+Path Utilization Ratio (%),13.096610017925926,,,Unbalanced Dual-WAN - Round Robin
+Delivery Efficiency (%),0.0,0.0,,Unbalanced Dual-WAN - Round Robin
+Buffer Length (ms),0.0,473.368,-100.0,Unbalanced Dual-WAN - Round Robin
+Buffer Underruns,1.0,14.0,92.85714285714286,Unbalanced Dual-WAN - Round Robin
+Throughput (Mbps),26.52095774,13.0863896125,102.66061553499388,Unbalanced Dual-WAN - Frame Aware
+Delay (seconds),0.08804351499999999,0.089690055,1.8358111164052868,Unbalanced Dual-WAN - Frame Aware
+Loss (%),0.0,0.0,,Unbalanced Dual-WAN - Frame Aware
+Jitter (seconds),1.790399037710805e-05,5.0566413072975e-05,64.59311766632551,Unbalanced Dual-WAN - Frame Aware
+Estimated MOS (1-5),4.646519727189458,4.637557291303735,0.19325768551751893,Unbalanced Dual-WAN - Frame Aware
+Throughput Stability (stddev),40.762784920486496,16.984880420557644,-139.99453579401876,Unbalanced Dual-WAN - Frame Aware
+Path Utilization Ratio (%),11.787092328888889,,,Unbalanced Dual-WAN - Frame Aware
+Delivery Efficiency (%),0.0,0.0,,Unbalanced Dual-WAN - Frame Aware
+Buffer Length (ms),0.0,473.368,-100.0,Unbalanced Dual-WAN - Frame Aware
+Buffer Underruns,1.0,14.0,92.85714285714286,Unbalanced Dual-WAN - Frame Aware
+Throughput (Mbps),29.467372540333333,13.0863896125,125.17572388480906,Unbalanced Dual-WAN - Buffer_Aware
+Delay (seconds),0.08804351499999999,0.089690055,1.8358111164052868,Unbalanced Dual-WAN - Buffer_Aware
+Loss (%),0.0,0.0,,Unbalanced Dual-WAN - Buffer_Aware
+Jitter (seconds),1.790399037710805e-05,5.0566413072975e-05,64.59311766632551,Unbalanced Dual-WAN - Buffer_Aware
+Estimated MOS (1-5),4.646519727189458,4.637557291303735,0.19325768551751893,Unbalanced Dual-WAN - Buffer_Aware
+Throughput Stability (stddev),41.945366488068636,16.984880420557644,-146.95709036196732,Unbalanced Dual-WAN - Buffer_Aware
+Path Utilization Ratio (%),13.096610017925926,,,Unbalanced Dual-WAN - Buffer_Aware
+Delivery Efficiency (%),0.0,0.0,,Unbalanced Dual-WAN - Buffer_Aware
+Buffer Length (ms),0.0,473.368,-100.0,Unbalanced Dual-WAN - Buffer_Aware
+Buffer Underruns,1.0,14.0,92.85714285714286,Unbalanced Dual-WAN - Buffer_Aware
+Throughput (Mbps),17.31900909090909,9.747748121153846,77.67189791583404,Congested Metro Network - Dynamic RTT Weights
+Delay (seconds),0.08923715,0.08958650192307692,0.38996044669417695,Congested Metro Network - Dynamic RTT Weights
+Loss (%),0.0,0.0,,Congested Metro Network - Dynamic RTT Weights
+Jitter (seconds),1.4265032991481923e-06,8.777445389384615e-06,83.74808118005046,Congested Metro Network - Dynamic RTT Weights
+Estimated MOS (1-5),4.642947463503178,4.6410147039268015,0.04164519398616919,Congested Metro Network - Dynamic RTT Weights
+Throughput Stability (stddev),22.525101204388452,10.118858404317423,-122.60516260191609,Congested Metro Network - Dynamic RTT Weights
+Path Utilization Ratio (%),72.16253787878787,,,Congested Metro Network - Dynamic RTT Weights
+Delivery Efficiency (%),0.0,0.0,,Congested Metro Network - Dynamic RTT Weights
+Buffer Length (ms),320.453,470.167,-31.842728222099808,Congested Metro Network - Dynamic RTT Weights
+Buffer Underruns,10.0,15.0,33.33333333333333,Congested Metro Network - Dynamic RTT Weights
+Throughput (Mbps),21.167677777777776,9.747748121153846,117.15454189713046,Congested Metro Network - Weighted Best Path
+Delay (seconds),0.08960549999999999,0.08958650192307692,-0.02120640555804259,Congested Metro Network - Weighted Best Path
+Loss (%),0.0,0.0,,Congested Metro Network - Weighted Best Path
+Jitter (seconds),1.43967243111412e-06,8.777445389384615e-06,83.59804741302919,Congested Metro Network - Weighted Best Path
+Estimated MOS (1-5),4.641473146410953,4.6410147039268015,0.009878065754967745,Congested Metro Network - Weighted Best Path
+Throughput Stability (stddev),23.209416156578815,10.118858404317423,-129.3679309384943,Congested Metro Network - Weighted Best Path
+Path Utilization Ratio (%),88.1986574074074,,,Congested Metro Network - Weighted Best Path
+Delivery Efficiency (%),0.0,0.0,,Congested Metro Network - Weighted Best Path
+Buffer Length (ms),320.453,470.167,-31.842728222099808,Congested Metro Network - Weighted Best Path
+Buffer Underruns,10.0,15.0,33.33333333333333,Congested Metro Network - Weighted Best Path
+Throughput (Mbps),17.227387636363634,9.747748121153846,76.73197360299068,Congested Metro Network - Round Robin
+Delay (seconds),0.08923706346153847,0.08958650192307692,0.39005704435083055,Congested Metro Network - Round Robin
+Loss (%),0.0,0.0,,Congested Metro Network - Round Robin
+Jitter (seconds),1.3076615683789616e-06,8.777445389384615e-06,85.10202558525242,Congested Metro Network - Round Robin
+Estimated MOS (1-5),4.642956468578645,4.6410147039268015,0.04183922645624562,Congested Metro Network - Round Robin
+Throughput Stability (stddev),22.594548109636214,10.118858404317423,-123.29147426349772,Congested Metro Network - Round Robin
+Path Utilization Ratio (%),71.78078181818181,,,Congested Metro Network - Round Robin
+Delivery Efficiency (%),0.0,0.0,,Congested Metro Network - Round Robin
+Buffer Length (ms),0.0,470.167,-100.0,Congested Metro Network - Round Robin
+Buffer Underruns,1.0,15.0,93.33333333333333,Congested Metro Network - Round Robin
+Throughput (Mbps),17.227387636363634,9.747748121153846,76.73197360299068,Congested Metro Network - Frame Aware
+Delay (seconds),0.08923706346153847,0.08958650192307692,0.39005704435083055,Congested Metro Network - Frame Aware
+Loss (%),0.0,0.0,,Congested Metro Network - Frame Aware
+Jitter (seconds),1.3076615683789616e-06,8.777445389384615e-06,85.10202558525242,Congested Metro Network - Frame Aware
+Estimated MOS (1-5),4.642956468578645,4.6410147039268015,0.04183922645624562,Congested Metro Network - Frame Aware
+Throughput Stability (stddev),22.594548110009324,10.118858404317423,-123.29147426718498,Congested Metro Network - Frame Aware
+Path Utilization Ratio (%),71.78078181818181,,,Congested Metro Network - Frame Aware
+Delivery Efficiency (%),0.0,0.0,,Congested Metro Network - Frame Aware
+Buffer Length (ms),0.0,470.167,-100.0,Congested Metro Network - Frame Aware
+Buffer Underruns,1.0,15.0,93.33333333333333,Congested Metro Network - Frame Aware
+Throughput (Mbps),17.227387636363634,9.747748121153846,76.73197360299068,Congested Metro Network - Buffer_Aware
+Delay (seconds),0.08923706346153847,0.08958650192307692,0.39005704435083055,Congested Metro Network - Buffer_Aware
+Loss (%),0.0,0.0,,Congested Metro Network - Buffer_Aware
+Jitter (seconds),1.3076615683789616e-06,8.777445389384615e-06,85.10202558525242,Congested Metro Network - Buffer_Aware
+Estimated MOS (1-5),4.642956468578645,4.6410147039268015,0.04183922645624562,Congested Metro Network - Buffer_Aware
+Throughput Stability (stddev),22.594548110009324,10.118858404317423,-123.29147426718498,Congested Metro Network - Buffer_Aware
+Path Utilization Ratio (%),71.78078181818181,,,Congested Metro Network - Buffer_Aware
+Delivery Efficiency (%),0.0,0.0,,Congested Metro Network - Buffer_Aware
+Buffer Length (ms),0.0,470.167,-100.0,Congested Metro Network - Buffer_Aware
+Buffer Underruns,1.0,15.0,93.33333333333333,Congested Metro Network - Buffer_Aware
+Throughput (Mbps),39.53866457272727,20.285445693181817,94.91149058665589,Balanced Gigabit - Dynamic RTT Weights
+Delay (seconds),0.03964261818181818,0.039945240909090914,0.7575939470773309,Balanced Gigabit - Dynamic RTT Weights
+Loss (%),0.0,0.0,,Balanced Gigabit - Dynamic RTT Weights
+Jitter (seconds),2.2474954673302046e-06,7.256591862272727e-06,69.02822275268076,Balanced Gigabit - Dynamic RTT Weights
+Estimated MOS (1-5),4.841256855363715,4.839661698319464,0.032960093983538157,Balanced Gigabit - Dynamic RTT Weights
+Throughput Stability (stddev),51.314372811543194,21.350642322576004,-140.34111965467088,Balanced Gigabit - Dynamic RTT Weights
+Path Utilization Ratio (%),3.6609874604377106,,,Balanced Gigabit - Dynamic RTT Weights
+Delivery Efficiency (%),0.0,0.0,,Balanced Gigabit - Dynamic RTT Weights
+Buffer Length (ms),343.355,472.54,-27.338426376603035,Balanced Gigabit - Dynamic RTT Weights
+Buffer Underruns,9.0,14.0,35.714285714285715,Balanced Gigabit - Dynamic RTT Weights
+Throughput (Mbps),48.32503477777778,20.285445693181817,138.22515664036118,Balanced Gigabit - Weighted Best Path
+Delay (seconds),0.03981492380952381,0.039945240909090914,0.3262393631914341,Balanced Gigabit - Weighted Best Path
+Loss (%),0.0,0.0,,Balanced Gigabit - Weighted Best Path
+Jitter (seconds),2.261893822917357e-06,7.256591862272727e-06,68.82980515030724,Balanced Gigabit - Weighted Best Path
+Estimated MOS (1-5),4.84056655782649,4.839661698319464,0.018696751207630813,Balanced Gigabit - Weighted Best Path
+Throughput Stability (stddev),52.85617601925731,21.350642322576004,-147.56246308977597,Balanced Gigabit - Weighted Best Path
+Path Utilization Ratio (%),4.474540257201647,,,Balanced Gigabit - Weighted Best Path
+Delivery Efficiency (%),0.0,0.0,,Balanced Gigabit - Weighted Best Path
+Buffer Length (ms),343.355,472.54,-27.338426376603035,Balanced Gigabit - Weighted Best Path
+Buffer Underruns,9.0,14.0,35.714285714285715,Balanced Gigabit - Weighted Best Path
+Throughput (Mbps),48.075459570666666,20.285445693181817,136.99484003363756,Balanced Gigabit - Round Robin
+Delay (seconds),0.03964242954545454,0.039945240909090914,0.7580661844686882,Balanced Gigabit - Round Robin
+Loss (%),0.0,0.0,,Balanced Gigabit - Round Robin
+Jitter (seconds),1.8597727400573636e-06,7.256591862272727e-06,74.37126442612286,Balanced Gigabit - Round Robin
+Estimated MOS (1-5),4.841287398071763,4.839661698319464,0.033591185781912176,Balanced Gigabit - Round Robin
+Throughput Stability (stddev),53.08209949024996,21.350642322576004,-148.6206208143975,Balanced Gigabit - Round Robin
+Path Utilization Ratio (%),4.451431441728395,,,Balanced Gigabit - Round Robin
+Delivery Efficiency (%),0.0,0.0,,Balanced Gigabit - Round Robin
+Buffer Length (ms),0.0,472.54,-100.0,Balanced Gigabit - Round Robin
+Buffer Underruns,1.0,14.0,92.85714285714286,Balanced Gigabit - Round Robin
+Throughput (Mbps),43.267924947299996,20.285445693181817,113.29541190136565,Balanced Gigabit - Frame Aware
+Delay (seconds),0.03964242954545454,0.039945240909090914,0.7580661844686882,Balanced Gigabit - Frame Aware
+Loss (%),0.0,0.0,,Balanced Gigabit - Frame Aware
+Jitter (seconds),1.8597727400573636e-06,7.256591862272727e-06,74.37126442612286,Balanced Gigabit - Frame Aware
+Estimated MOS (1-5),4.841287398071763,4.839661698319464,0.033591185781912176,Balanced Gigabit - Frame Aware
+Throughput Stability (stddev),52.38272482475984,21.350642322576004,-145.3449598065289,Balanced Gigabit - Frame Aware
+Path Utilization Ratio (%),4.006289346972221,,,Balanced Gigabit - Frame Aware
+Delivery Efficiency (%),0.0,0.0,,Balanced Gigabit - Frame Aware
+Buffer Length (ms),0.0,472.54,-100.0,Balanced Gigabit - Frame Aware
+Buffer Underruns,1.0,14.0,92.85714285714286,Balanced Gigabit - Frame Aware
+Throughput (Mbps),48.075459570666666,20.285445693181817,136.99484003363756,Balanced Gigabit - Buffer_Aware
+Delay (seconds),0.03964242954545454,0.039945240909090914,0.7580661844686882,Balanced Gigabit - Buffer_Aware
+Loss (%),0.0,0.0,,Balanced Gigabit - Buffer_Aware
+Jitter (seconds),1.8597727400573636e-06,7.256591862272727e-06,74.37126442612286,Balanced Gigabit - Buffer_Aware
+Estimated MOS (1-5),4.841287398071763,4.839661698319464,0.033591185781912176,Balanced Gigabit - Buffer_Aware
+Throughput Stability (stddev),53.08209949024996,21.350642322576004,-148.6206208143975,Balanced Gigabit - Buffer_Aware
+Path Utilization Ratio (%),4.451431441728395,,,Balanced Gigabit - Buffer_Aware
+Delivery Efficiency (%),0.0,0.0,,Balanced Gigabit - Buffer_Aware
+Buffer Length (ms),0.0,472.54,-100.0,Balanced Gigabit - Buffer_Aware
+Buffer Underruns,1.0,14.0,92.85714285714286,Balanced Gigabit - Buffer_Aware
+Throughput (Mbps),47.99349909090909,20.714587956818182,131.68937364796622,Hybrid Fiber-5G - Dynamic RTT Weights
+Delay (seconds),0.05818560909090909,0.058382468181818185,0.3371887092817367,Hybrid Fiber-5G - Dynamic RTT Weights
+Loss (%),0.0,0.0,,Hybrid Fiber-5G - Dynamic RTT Weights
+Jitter (seconds),9.756586493499568e-07,3.9259928592727275e-06,75.14874111282278,Hybrid Fiber-5G - Dynamic RTT Weights
+Estimated MOS (1-5),4.767184052487838,4.7661743845762405,0.021184032100571452,Hybrid Fiber-5G - Dynamic RTT Weights
+Throughput Stability (stddev),79.75540412810753,29.05189803373978,-174.52734425641526,Hybrid Fiber-5G - Dynamic RTT Weights
+Path Utilization Ratio (%),2.9625616722783388,,,Hybrid Fiber-5G - Dynamic RTT Weights
+Delivery Efficiency (%),0.0,0.0,,Hybrid Fiber-5G - Dynamic RTT Weights
+Buffer Length (ms),352.239,454.605,-22.51757019830403,Hybrid Fiber-5G - Dynamic RTT Weights
+Buffer Underruns,11.0,15.0,26.666666666666668,Hybrid Fiber-5G - Dynamic RTT Weights
+Throughput (Mbps),58.65872111111111,20.714587956818182,183.17590112529206,Hybrid Fiber-5G - Weighted Best Path
+Delay (seconds),0.06000327857142858,0.058382468181818185,-2.776193676092569,Hybrid Fiber-5G - Weighted Best Path
+Loss (%),0.0,0.0,,Hybrid Fiber-5G - Weighted Best Path
+Jitter (seconds),9.659840612237641e-07,3.9259928592727275e-06,75.39516509964544,Hybrid Fiber-5G - Weighted Best Path
+Estimated MOS (1-5),4.759914243966245,4.7661743845762405,-0.13134518598929504,Hybrid Fiber-5G - Weighted Best Path
+Throughput Stability (stddev),84.5514470053263,29.05189803373978,-191.03587967688526,Hybrid Fiber-5G - Weighted Best Path
+Path Utilization Ratio (%),3.6209087105624143,,,Hybrid Fiber-5G - Weighted Best Path
+Delivery Efficiency (%),0.0,0.0,,Hybrid Fiber-5G - Weighted Best Path
+Buffer Length (ms),352.239,454.605,-22.51757019830403,Hybrid Fiber-5G - Weighted Best Path
+Buffer Underruns,11.0,15.0,26.666666666666668,Hybrid Fiber-5G - Weighted Best Path
+Throughput (Mbps),58.358479570666674,20.714587956818182,181.72648035443086,Hybrid Fiber-5G - Round Robin
+Delay (seconds),0.05818556363636363,0.058382468181818185,0.337266565780231,Hybrid Fiber-5G - Round Robin
+Loss (%),0.0,0.0,,Hybrid Fiber-5G - Round Robin
+Jitter (seconds),9.111322857135931e-07,3.9259928592727275e-06,76.79230914642122,Hybrid Fiber-5G - Round Robin
+Estimated MOS (1-5),4.767189096051336,4.7661743845762405,0.021289852053652275,Hybrid Fiber-5G - Round Robin
+Throughput Stability (stddev),84.75677988213171,29.05189803373978,-191.74265923589016,Hybrid Fiber-5G - Round Robin
+Path Utilization Ratio (%),3.6023752821399184,,,Hybrid Fiber-5G - Round Robin
+Delivery Efficiency (%),0.0,0.0,,Hybrid Fiber-5G - Round Robin
+Buffer Length (ms),0.0,454.605,-100.0,Hybrid Fiber-5G - Round Robin
+Buffer Underruns,1.0,15.0,93.33333333333333,Hybrid Fiber-5G - Round Robin
+Throughput (Mbps),52.52264294730001,20.714587956818182,153.55388703260326,Hybrid Fiber-5G - Frame Aware
+Delay (seconds),0.05818556136363637,0.058382468181818185,0.3372704586051391,Hybrid Fiber-5G - Frame Aware
+Loss (%),0.0,0.0,,Hybrid Fiber-5G - Frame Aware
+Jitter (seconds),9.024050129863205e-07,3.9259928592727275e-06,77.01460381276681,Hybrid Fiber-5G - Frame Aware
+Estimated MOS (1-5),4.767189762699796,4.7661743845762405,0.02130383913020885,Hybrid Fiber-5G - Frame Aware
+Throughput Stability (stddev),82.29127210251482,29.05189803373978,-183.25609571858212,Hybrid Fiber-5G - Frame Aware
+Path Utilization Ratio (%),3.242138453537038,,,Hybrid Fiber-5G - Frame Aware
+Delivery Efficiency (%),0.0,0.0,,Hybrid Fiber-5G - Frame Aware
+Buffer Length (ms),0.0,454.605,-100.0,Hybrid Fiber-5G - Frame Aware
+Buffer Underruns,1.0,15.0,93.33333333333333,Hybrid Fiber-5G - Frame Aware
+Throughput (Mbps),58.358479570666674,20.714587956818182,181.72648035443086,Hybrid Fiber-5G - Buffer_Aware
+Delay (seconds),0.05818556363636363,0.058382468181818185,0.337266565780231,Hybrid Fiber-5G - Buffer_Aware
+Loss (%),0.0,0.0,,Hybrid Fiber-5G - Buffer_Aware
+Jitter (seconds),9.111322857135931e-07,3.9259928592727275e-06,76.79230914642122,Hybrid Fiber-5G - Buffer_Aware
+Estimated MOS (1-5),4.767189096051336,4.7661743845762405,0.021289852053652275,Hybrid Fiber-5G - Buffer_Aware
+Throughput Stability (stddev),84.75677988213171,29.05189803373978,-191.74265923589016,Hybrid Fiber-5G - Buffer_Aware
+Path Utilization Ratio (%),3.6023752821399184,,,Hybrid Fiber-5G - Buffer_Aware
+Delivery Efficiency (%),0.0,0.0,,Hybrid Fiber-5G - Buffer_Aware
+Buffer Length (ms),0.0,454.605,-100.0,Hybrid Fiber-5G - Buffer_Aware
+Buffer Underruns,1.0,15.0,93.33333333333333,Hybrid Fiber-5G - Buffer_Aware
+Throughput (Mbps),54.76486601818181,29.553548754999998,85.3072416858786,High-Speed Asymmetric - Dynamic RTT Weights
+Delay (seconds),0.032002117499999996,0.0321106175,0.3378944674608155,High-Speed Asymmetric - Dynamic RTT Weights
+Loss (%),0.0,0.0,,High-Speed Asymmetric - Dynamic RTT Weights
+Jitter (seconds),4.4201263172430247e-07,2.17946236489e-06,79.71918951917247,High-Speed Asymmetric - Dynamic RTT Weights
+Estimated MOS (1-5),4.8719573006166765,4.8713887717213975,0.011670776485329248,High-Speed Asymmetric - Dynamic RTT Weights
+Throughput Stability (stddev),80.27492785972008,35.4299624218904,-126.5735619581753,High-Speed Asymmetric - Dynamic RTT Weights
+Path Utilization Ratio (%),1.901557847853535,,,High-Speed Asymmetric - Dynamic RTT Weights
+Delivery Efficiency (%),0.0,0.0,,High-Speed Asymmetric - Dynamic RTT Weights
+Buffer Length (ms),676.235,815.325,-17.05945481863061,High-Speed Asymmetric - Dynamic RTT Weights
+Buffer Underruns,2.0,12.0,83.33333333333334,High-Speed Asymmetric - Dynamic RTT Weights
+Throughput (Mbps),66.93483555555555,29.553548754999998,126.48662639619963,High-Speed Asymmetric - Weighted Best Path
+Delay (seconds),0.03263343157894737,0.0321106175,-1.6281657584048825,High-Speed Asymmetric - Weighted Best Path
+Loss (%),0.0,0.0,,High-Speed Asymmetric - Weighted Best Path
+Jitter (seconds),4.4647371760452893e-07,2.17946236489e-06,79.51450207184179,High-Speed Asymmetric - Weighted Best Path
+Estimated MOS (1-5),4.869431721384363,4.8713887717213975,-0.04017438206523029,High-Speed Asymmetric - Weighted Best Path
+Throughput Stability (stddev),84.03399462054219,35.4299624218904,-137.18341447808533,High-Speed Asymmetric - Weighted Best Path
+Path Utilization Ratio (%),2.3241262345679012,,,High-Speed Asymmetric - Weighted Best Path
+Delivery Efficiency (%),0.0,0.0,,High-Speed Asymmetric - Weighted Best Path
+Buffer Length (ms),676.235,815.325,-17.05945481863061,High-Speed Asymmetric - Weighted Best Path
+Buffer Underruns,2.0,12.0,83.33333333333334,High-Speed Asymmetric - Weighted Best Path
+Throughput (Mbps),54.37376384727273,29.553548754999998,83.983873808297,High-Speed Asymmetric - Round Robin
+Delay (seconds),0.032002094999999994,0.0321106175,0.3379645377420925,High-Speed Asymmetric - Round Robin
+Loss (%),0.0,0.0,,High-Speed Asymmetric - Round Robin
+Jitter (seconds),4.213740067242675e-07,2.17946236489e-06,80.66614897727152,High-Speed Asymmetric - Round Robin
+Estimated MOS (1-5),4.871958988867542,4.8713887717213975,0.011705432944594594,High-Speed Asymmetric - Round Robin
+Throughput Stability (stddev),80.53937405576345,35.4299624218904,-127.31995336806283,High-Speed Asymmetric - Round Robin
+Path Utilization Ratio (%),1.8879779113636364,,,High-Speed Asymmetric - Round Robin
+Delivery Efficiency (%),0.0,0.0,,High-Speed Asymmetric - Round Robin
+Buffer Length (ms),0.0,815.325,-100.0,High-Speed Asymmetric - Round Robin
+Buffer Underruns,1.0,12.0,91.66666666666666,High-Speed Asymmetric - Round Robin
+Throughput (Mbps),54.37376384727273,29.553548754999998,83.983873808297,High-Speed Asymmetric - Frame Aware
+Delay (seconds),0.032002094999999994,0.0321106175,0.3379645377420925,High-Speed Asymmetric - Frame Aware
+Loss (%),0.0,0.0,,High-Speed Asymmetric - Frame Aware
+Jitter (seconds),4.0630525672426747e-07,2.17946236489e-06,81.35754655507557,High-Speed Asymmetric - Frame Aware
+Estimated MOS (1-5),4.871960155789017,4.8713887717213975,0.011729387540084452,High-Speed Asymmetric - Frame Aware
+Throughput Stability (stddev),80.53937405576345,35.4299624218904,-127.31995336806283,High-Speed Asymmetric - Frame Aware
+Path Utilization Ratio (%),1.8879779113636364,,,High-Speed Asymmetric - Frame Aware
+Delivery Efficiency (%),0.0,0.0,,High-Speed Asymmetric - Frame Aware
+Buffer Length (ms),0.0,815.325,-100.0,High-Speed Asymmetric - Frame Aware
+Buffer Underruns,1.0,12.0,91.66666666666666,High-Speed Asymmetric - Frame Aware
+Throughput (Mbps),54.37376384727273,29.553548754999998,83.983873808297,High-Speed Asymmetric - Buffer_Aware
+Delay (seconds),0.0320020925,0.0321106175,0.3379723233288746,High-Speed Asymmetric - Buffer_Aware
+Loss (%),0.0,0.0,,High-Speed Asymmetric - Buffer_Aware
+Jitter (seconds),4.153465067242675e-07,2.17946236489e-06,80.94270800839314,High-Speed Asymmetric - Buffer_Aware
+Estimated MOS (1-5),4.871959465636048,4.8713887717213975,0.011715220061344952,High-Speed Asymmetric - Buffer_Aware
+Throughput Stability (stddev),80.53937405576345,35.4299624218904,-127.31995336806283,High-Speed Asymmetric - Buffer_Aware
+Path Utilization Ratio (%),1.8879779113636364,,,High-Speed Asymmetric - Buffer_Aware
+Delivery Efficiency (%),0.0,0.0,,High-Speed Asymmetric - Buffer_Aware
+Buffer Length (ms),0.0,815.325,-100.0,High-Speed Asymmetric - Buffer_Aware
+Buffer Underruns,1.0,12.0,91.66666666666666,High-Speed Asymmetric - Buffer_Aware
+Throughput (Mbps),104.187736,52.880973440000005,97.02310532958296,Enterprise Multi-Gigabit - Dynamic RTT Weights
+Delay (seconds),0.015601142500000002,0.0156610275,0.3823823181461057,Enterprise Multi-Gigabit - Dynamic RTT Weights
+Loss (%),0.0,0.0,,Enterprise Multi-Gigabit - Dynamic RTT Weights
+Jitter (seconds),2.566402515615e-07,1.153559875175e-06,77.752325034488,Enterprise Multi-Gigabit - Dynamic RTT Weights
+Estimated MOS (1-5),4.937575219090366,4.93726505048462,0.006282194749006217,Enterprise Multi-Gigabit - Dynamic RTT Weights
+Throughput Stability (stddev),140.89334641150305,58.49180179669646,-140.87708376844793,Enterprise Multi-Gigabit - Dynamic RTT Weights
+Path Utilization Ratio (%),1.9294025185185186,,,Enterprise Multi-Gigabit - Dynamic RTT Weights
+Delivery Efficiency (%),0.0,0.0,,Enterprise Multi-Gigabit - Dynamic RTT Weights
+Buffer Length (ms),5710.92,1109.7,414.63638821303056,Enterprise Multi-Gigabit - Dynamic RTT Weights
+Buffer Underruns,0.0,6.0,100.0,Enterprise Multi-Gigabit - Dynamic RTT Weights
+Throughput (Mbps),127.34056622222222,52.880973440000005,140.80601762504583,Enterprise Multi-Gigabit - Weighted Best Path
+Delay (seconds),0.015790426315789474,0.0156610275,-0.8262472930941057,Enterprise Multi-Gigabit - Weighted Best Path
+Loss (%),0.0,0.0,,Enterprise Multi-Gigabit - Weighted Best Path
+Jitter (seconds),2.574496069068421e-07,1.153559875175e-06,77.68216349690682,Enterprise Multi-Gigabit - Weighted Best Path
+Estimated MOS (1-5),4.9368180239874135,4.93726505048462,-0.009054132047511548,Enterprise Multi-Gigabit - Weighted Best Path
+Throughput Stability (stddev),145.99440630622004,58.49180179669646,-149.59806643273149,Enterprise Multi-Gigabit - Weighted Best Path
+Path Utilization Ratio (%),2.358158633744856,,,Enterprise Multi-Gigabit - Weighted Best Path
+Delivery Efficiency (%),0.0,0.0,,Enterprise Multi-Gigabit - Weighted Best Path
+Buffer Length (ms),5710.92,1109.7,414.63638821303056,Enterprise Multi-Gigabit - Weighted Best Path
+Buffer Underruns,0.0,6.0,100.0,Enterprise Multi-Gigabit - Weighted Best Path
+Throughput (Mbps),103.67307067563637,52.880973440000005,96.04985296510525,Enterprise Multi-Gigabit - Round Robin
+Delay (seconds),0.0156011325,0.0156610275,0.3824461709169515,Enterprise Multi-Gigabit - Round Robin
+Loss (%),0.0,0.0,,Enterprise Multi-Gigabit - Round Robin
+Jitter (seconds),2.319170015615e-07,1.153559875175e-06,79.89553844993809,Enterprise Multi-Gigabit - Round Robin
+Estimated MOS (1-5),4.937577206093305,4.93726505048462,0.006322439761553791,Enterprise Multi-Gigabit - Round Robin
+Throughput Stability (stddev),141.26896911370798,58.49180179669646,-141.51926385295022,Enterprise Multi-Gigabit - Round Robin
+Path Utilization Ratio (%),1.9198716791784514,,,Enterprise Multi-Gigabit - Round Robin
+Delivery Efficiency (%),0.0,0.0,,Enterprise Multi-Gigabit - Round Robin
+Buffer Length (ms),0.0,1109.7,-100.0,Enterprise Multi-Gigabit - Round Robin
+Buffer Underruns,1.0,6.0,83.33333333333334,Enterprise Multi-Gigabit - Round Robin
+Throughput (Mbps),103.67307067563637,52.880973440000005,96.04985296510525,Enterprise Multi-Gigabit - Frame Aware
+Delay (seconds),0.0156011325,0.0156610275,0.3824461709169515,Enterprise Multi-Gigabit - Frame Aware
+Loss (%),0.0,0.0,,Enterprise Multi-Gigabit - Frame Aware
+Jitter (seconds),2.319170015615e-07,1.153559875175e-06,79.89553844993809,Enterprise Multi-Gigabit - Frame Aware
+Estimated MOS (1-5),4.937577206093305,4.93726505048462,0.006322439761553791,Enterprise Multi-Gigabit - Frame Aware
+Throughput Stability (stddev),141.26896911370798,58.49180179669646,-141.51926385295022,Enterprise Multi-Gigabit - Frame Aware
+Path Utilization Ratio (%),1.9198716791784514,,,Enterprise Multi-Gigabit - Frame Aware
+Delivery Efficiency (%),0.0,0.0,,Enterprise Multi-Gigabit - Frame Aware
+Buffer Length (ms),0.0,1109.7,-100.0,Enterprise Multi-Gigabit - Frame Aware
+Buffer Underruns,1.0,6.0,83.33333333333334,Enterprise Multi-Gigabit - Frame Aware
+Throughput (Mbps),103.67307067554545,52.880973440000005,96.04985296493331,Enterprise Multi-Gigabit - Buffer_Aware
+Delay (seconds),0.0156011325,0.0156610275,0.3824461709169515,Enterprise Multi-Gigabit - Buffer_Aware
+Loss (%),0.0,0.0,,Enterprise Multi-Gigabit - Buffer_Aware
+Jitter (seconds),2.319170015615e-07,1.153559875175e-06,79.89553844993809,Enterprise Multi-Gigabit - Buffer_Aware
+Estimated MOS (1-5),4.937577206093305,4.93726505048462,0.006322439761553791,Enterprise Multi-Gigabit - Buffer_Aware
+Throughput Stability (stddev),141.26896911382775,58.49180179669646,-141.51926385315497,Enterprise Multi-Gigabit - Buffer_Aware
+Path Utilization Ratio (%),1.9198716791767676,,,Enterprise Multi-Gigabit - Buffer_Aware
+Delivery Efficiency (%),0.0,0.0,,Enterprise Multi-Gigabit - Buffer_Aware
+Buffer Length (ms),0.0,1109.7,-100.0,Enterprise Multi-Gigabit - Buffer_Aware
+Buffer Underruns,1.0,6.0,83.33333333333334,Enterprise Multi-Gigabit - Buffer_Aware
+Throughput (Mbps),508.3923056363636,268.26771258611114,89.509315428026,Data Center Network - Dynamic RTT Weights
+Delay (seconds),0.003778576666666667,0.0038090480555555556,0.7999738634025836,Data Center Network - Dynamic RTT Weights
+Loss (%),0.0,0.0,,Data Center Network - Dynamic RTT Weights
+Jitter (seconds),3.2442786935379724e-07,1.0571471358222223e-06,69.31100143392382,Data Center Network - Dynamic RTT Weights
+Estimated MOS (1-5),4.984859837173831,4.984679558144851,0.0036166623526520713,Data Center Network - Dynamic RTT Weights
+Throughput Stability (stddev),784.4403302893832,350.94200977684636,-123.52420298390197,Data Center Network - Dynamic RTT Weights
+Path Utilization Ratio (%),4.707336163299662,,,Data Center Network - Dynamic RTT Weights
+Delivery Efficiency (%),0.0,0.0,,Data Center Network - Dynamic RTT Weights
+Buffer Length (ms),4920.73,1234.68,298.542942300839,Data Center Network - Dynamic RTT Weights
+Buffer Underruns,0.0,5.0,100.0,Data Center Network - Dynamic RTT Weights
+Throughput (Mbps),621.3683724444444,268.26771258611114,131.62249622007405,Data Center Network - Weighted Best Path
+Delay (seconds),0.0038830485294117645,0.0038090480555555556,-1.9427550605006954,Data Center Network - Weighted Best Path
+Loss (%),0.0,0.0,,Data Center Network - Weighted Best Path
+Jitter (seconds),3.275995675510794e-07,1.0571471358222223e-06,69.01097714309364,Data Center Network - Weighted Best Path
+Estimated MOS (1-5),4.98444169968375,4.984679558144851,-0.004771790409516649,Data Center Network - Weighted Best Path
+Throughput Stability (stddev),825.766895041931,350.94200977684636,-135.30009860233366,Data Center Network - Weighted Best Path
+Path Utilization Ratio (%),5.753410855967077,,,Data Center Network - Weighted Best Path
+Delivery Efficiency (%),0.0,0.0,,Data Center Network - Weighted Best Path
+Buffer Length (ms),4920.73,1234.68,298.542942300839,Data Center Network - Weighted Best Path
+Buffer Underruns,0.0,5.0,100.0,Data Center Network - Weighted Best Path
+Throughput (Mbps),507.88783359999996,268.26771258611114,89.32126743987995,Data Center Network - Round Robin
+Delay (seconds),0.0037785591666666665,0.0038090480555555556,0.8004332957789961,Data Center Network - Round Robin
+Loss (%),0.0,0.0,,Data Center Network - Round Robin
+Jitter (seconds),2.980425003330556e-07,1.0571471358222223e-06,71.8069046177526,Data Center Network - Round Robin
+Estimated MOS (1-5),4.984862010027005,4.984679558144851,0.0036602529816681627,Data Center Network - Round Robin
+Throughput Stability (stddev),784.7664385058675,350.94200977684636,-123.61712666000781,Data Center Network - Round Robin
+Path Utilization Ratio (%),4.702665125925925,,,Data Center Network - Round Robin
+Delivery Efficiency (%),0.0,0.0,,Data Center Network - Round Robin
+Buffer Length (ms),0.0,1234.68,-100.0,Data Center Network - Round Robin
+Buffer Underruns,1.0,5.0,80.0,Data Center Network - Round Robin
+Throughput (Mbps),507.88783359999996,268.26771258611114,89.32126743987995,Data Center Network - Frame Aware
+Delay (seconds),0.0037785575,0.0038090480555555556,0.8004770512434152,Data Center Network - Frame Aware
+Loss (%),0.0,0.0,,Data Center Network - Frame Aware
+Jitter (seconds),2.9845297255527775e-07,1.0571471358222223e-06,71.76807632145277,Data Center Network - Frame Aware
+Estimated MOS (1-5),4.984861983979933,4.984679558144851,0.0036597304391104927,Data Center Network - Frame Aware
+Throughput Stability (stddev),784.7664385059762,350.94200977684636,-123.61712666003879,Data Center Network - Frame Aware
+Path Utilization Ratio (%),4.702665125925925,,,Data Center Network - Frame Aware
+Delivery Efficiency (%),0.0,0.0,,Data Center Network - Frame Aware
+Buffer Length (ms),0.0,1234.68,-100.0,Data Center Network - Frame Aware
+Buffer Underruns,1.0,5.0,80.0,Data Center Network - Frame Aware
+Throughput (Mbps),507.88783359999996,268.26771258611114,89.32126743987995,Data Center Network - Buffer_Aware
+Delay (seconds),0.0037785586111111114,0.0038090480555555556,0.8004478809337912,Data Center Network - Buffer_Aware
+Loss (%),0.0,0.0,,Data Center Network - Buffer_Aware
+Jitter (seconds),2.970772225552778e-07,1.0571471358222223e-06,71.89821430824588,Data Center Network - Buffer_Aware
+Estimated MOS (1-5),4.9848620891796465,4.984679558144851,0.003661840900025822,Data Center Network - Buffer_Aware
+Throughput Stability (stddev),784.7664385059159,350.94200977684636,-123.61712666002158,Data Center Network - Buffer_Aware
+Path Utilization Ratio (%),4.702665125925925,,,Data Center Network - Buffer_Aware
+Delivery Efficiency (%),0.0,0.0,,Data Center Network - Buffer_Aware
+Buffer Length (ms),0.0,1234.68,-100.0,Data Center Network - Buffer_Aware
+Buffer Underruns,1.0,5.0,80.0,Data Center Network - Buffer_Aware
+Throughput (Mbps),19.99582649090909,7.6528219825,161.28696756091162,Satellite + Terrestrial Hybrid - Dynamic RTT Weights
+Delay (seconds),0.7272823681818181,0.7275881090909091,0.04202115252721467,Satellite + Terrestrial Hybrid - Dynamic RTT Weights
+Loss (%),4.346714493181818,1.8334378,-137.08000855997503,Satellite + Terrestrial Hybrid - Dynamic RTT Weights
+Jitter (seconds),8.874903996851137e-07,8.022724351495455e-06,88.93779268984004,Satellite + Terrestrial Hybrid - Dynamic RTT Weights
+Estimated MOS (1-5),1.8537702361919115,1.9895987010100438,-6.826927698996653,Satellite + Terrestrial Hybrid - Dynamic RTT Weights
+Throughput Stability (stddev),40.498763804073455,15.110186537786602,-168.0229241564735,Satellite + Terrestrial Hybrid - Dynamic RTT Weights
+Path Utilization Ratio (%),1.5869703564213564,,,Satellite + Terrestrial Hybrid - Dynamic RTT Weights
+Delivery Efficiency (%),0.0,0.0,,Satellite + Terrestrial Hybrid - Dynamic RTT Weights
+Buffer Length (ms),334.525,471.988,-29.124257396374485,Satellite + Terrestrial Hybrid - Dynamic RTT Weights
+Buffer Underruns,7.0,15.0,53.333333333333336,Satellite + Terrestrial Hybrid - Dynamic RTT Weights
+Throughput (Mbps),24.439343377777774,7.6528219825,219.35073667810582,Satellite + Terrestrial Hybrid - Weighted Best Path
+Delay (seconds),0.7600092476190476,0.7275881090909091,-4.4559742144009755,Satellite + Terrestrial Hybrid - Weighted Best Path
+Loss (%),4.553700897619048,1.8334378,-148.36953277711672,Satellite + Terrestrial Hybrid - Weighted Best Path
+Jitter (seconds),8.816063710986904e-07,8.022724351495455e-06,89.01113471592282,Satellite + Terrestrial Hybrid - Weighted Best Path
+Estimated MOS (1-5),1.741380716266576,1.9895987010100438,-12.475781403428588,Satellite + Terrestrial Hybrid - Weighted Best Path
+Throughput Stability (stddev),43.54390699486295,15.110186537786602,-188.17584009284792,Satellite + Terrestrial Hybrid - Weighted Best Path
+Path Utilization Ratio (%),1.9396304268077598,,,Satellite + Terrestrial Hybrid - Weighted Best Path
+Delivery Efficiency (%),0.0,0.0,,Satellite + Terrestrial Hybrid - Weighted Best Path
+Buffer Length (ms),334.525,471.988,-29.124257396374485,Satellite + Terrestrial Hybrid - Weighted Best Path
+Buffer Underruns,7.0,15.0,53.333333333333336,Satellite + Terrestrial Hybrid - Weighted Best Path
+Throughput (Mbps),24.23930931511111,7.6528219825,216.73687654750188,Satellite + Terrestrial Hybrid - Round Robin
+Delay (seconds),0.7272823136363636,0.7275881090909091,0.042028649276241344,Satellite + Terrestrial Hybrid - Round Robin
+Loss (%),4.346714493181818,1.8334378,-137.08000855997503,Satellite + Terrestrial Hybrid - Round Robin
+Jitter (seconds),7.806458542305682e-07,8.022724351495455e-06,90.26956654586975,Satellite + Terrestrial Hybrid - Round Robin
+Estimated MOS (1-5),1.8537722313985996,1.9895987010100438,-6.826827417131416,Satellite + Terrestrial Hybrid - Round Robin
+Throughput Stability (stddev),43.6536971983364,15.110186537786602,-188.9024373668054,Satellite + Terrestrial Hybrid - Round Robin
+Path Utilization Ratio (%),1.9237547075485009,,,Satellite + Terrestrial Hybrid - Round Robin
+Delivery Efficiency (%),0.0,0.0,,Satellite + Terrestrial Hybrid - Round Robin
+Buffer Length (ms),0.0,471.988,-100.0,Satellite + Terrestrial Hybrid - Round Robin
+Buffer Underruns,1.0,15.0,93.33333333333333,Satellite + Terrestrial Hybrid - Round Robin
+Throughput (Mbps),21.8153897173,7.6528219825,185.0633369910614,Satellite + Terrestrial Hybrid - Frame Aware
+Delay (seconds),0.7272823136363636,0.7275881090909091,0.042028649276241344,Satellite + Terrestrial Hybrid - Frame Aware
+Loss (%),4.346714493181818,1.8334378,-137.08000855997503,Satellite + Terrestrial Hybrid - Frame Aware
+Jitter (seconds),7.806458542305682e-07,8.022724351495455e-06,90.26956654586975,Satellite + Terrestrial Hybrid - Frame Aware
+Estimated MOS (1-5),1.8537722313985996,1.9895987010100438,-6.826827417131416,Satellite + Terrestrial Hybrid - Frame Aware
+Throughput Stability (stddev),42.04710723860425,15.110186537786602,-178.26994149579485,Satellite + Terrestrial Hybrid - Frame Aware
+Path Utilization Ratio (%),1.7313801362936507,,,Satellite + Terrestrial Hybrid - Frame Aware
+Delivery Efficiency (%),0.0,0.0,,Satellite + Terrestrial Hybrid - Frame Aware
+Buffer Length (ms),0.0,471.988,-100.0,Satellite + Terrestrial Hybrid - Frame Aware
+Buffer Underruns,1.0,15.0,93.33333333333333,Satellite + Terrestrial Hybrid - Frame Aware
+Throughput (Mbps),24.23930931511111,7.6528219825,216.73687654750188,Satellite + Terrestrial Hybrid - Buffer_Aware
+Delay (seconds),0.7272823136363636,0.7275881090909091,0.042028649276241344,Satellite + Terrestrial Hybrid - Buffer_Aware
+Loss (%),4.346714493181818,1.8334378,-137.08000855997503,Satellite + Terrestrial Hybrid - Buffer_Aware
+Jitter (seconds),7.806458542305682e-07,8.022724351495455e-06,90.26956654586975,Satellite + Terrestrial Hybrid - Buffer_Aware
+Estimated MOS (1-5),1.8537722313985996,1.9895987010100438,-6.826827417131416,Satellite + Terrestrial Hybrid - Buffer_Aware
+Throughput Stability (stddev),43.6536971983364,15.110186537786602,-188.9024373668054,Satellite + Terrestrial Hybrid - Buffer_Aware
+Path Utilization Ratio (%),1.9237547075485009,,,Satellite + Terrestrial Hybrid - Buffer_Aware
+Delivery Efficiency (%),0.0,0.0,,Satellite + Terrestrial Hybrid - Buffer_Aware
+Buffer Length (ms),0.0,471.988,-100.0,Satellite + Terrestrial Hybrid - Buffer_Aware
+Buffer Underruns,1.0,15.0,93.33333333333333,Satellite + Terrestrial Hybrid - Buffer_Aware
+Throughput (Mbps),276.12202718181817,171.6714081875,60.84334024931917,Ultra-High Speed Research Network - Dynamic RTT Weights
+Delay (seconds),0.0057508846875,0.0057676928125,0.29141851943939734,Ultra-High Speed Research Network - Dynamic RTT Weights
+Loss (%),0.0,0.0,,Ultra-High Speed Research Network - Dynamic RTT Weights
+Jitter (seconds),4.736915645743562e-07,2.7559900010625e-06,82.81229016100433,Ultra-High Speed Research Network - Dynamic RTT Weights
+Estimated MOS (1-5),4.97695878385648,4.9767100212062125,0.004998536165607575,Ultra-High Speed Research Network - Dynamic RTT Weights
+Throughput Stability (stddev),389.2896057279008,211.22780934686918,-84.29846284521476,Ultra-High Speed Research Network - Dynamic RTT Weights
+Path Utilization Ratio (%),1.1363046386083053,,,Ultra-High Speed Research Network - Dynamic RTT Weights
+Delivery Efficiency (%),0.0,0.0,,Ultra-High Speed Research Network - Dynamic RTT Weights
+Buffer Length (ms),104305.0,56442.7,84.7980341124716,Ultra-High Speed Research Network - Dynamic RTT Weights
+Buffer Underruns,0.0,0.0,,Ultra-High Speed Research Network - Dynamic RTT Weights
+Throughput (Mbps),337.48247555555554,171.6714081875,96.58630351942837,Ultra-High Speed Research Network - Weighted Best Path
+Delay (seconds),0.005867481333333333,0.0057676928125,-1.7301289107676971,Ultra-High Speed Research Network - Weighted Best Path
+Loss (%),0.0,0.0,,Ultra-High Speed Research Network - Weighted Best Path
+Jitter (seconds),4.3633533554598e-07,2.7559900010625e-06,84.167746059392,Ultra-High Speed Research Network - Weighted Best Path
+Estimated MOS (1-5),4.976495372654978,4.9767100212062125,-0.004313061245682711,Ultra-High Speed Research Network - Weighted Best Path
+Throughput Stability (stddev),405.62128911986986,211.22780934686918,-92.0302494136916,Ultra-High Speed Research Network - Weighted Best Path
+Path Utilization Ratio (%),1.3888167718335618,,,Ultra-High Speed Research Network - Weighted Best Path
+Delivery Efficiency (%),0.0,0.0,,Ultra-High Speed Research Network - Weighted Best Path
+Buffer Length (ms),104305.0,56442.7,84.7980341124716,Ultra-High Speed Research Network - Weighted Best Path
+Buffer Underruns,0.0,0.0,,Ultra-High Speed Research Network - Weighted Best Path
+Throughput (Mbps),273.1734862927273,171.6714081875,59.125791054481525,Ultra-High Speed Research Network - Round Robin
+Delay (seconds),0.0057507590625,0.0057676928125,0.2935966000703133,Ultra-High Speed Research Network - Round Robin
+Loss (%),0.0,0.0,,Ultra-High Speed Research Network - Round Robin
+Jitter (seconds),3.6695235207435625e-07,2.7559900010625e-06,86.68527999256574,Ultra-High Speed Research Network - Round Robin
+Estimated MOS (1-5),4.9769677763822,4.9767100212062125,0.005179228343397762,Ultra-High Speed Research Network - Round Robin
+Throughput Stability (stddev),391.32261600839706,211.22780934686918,-85.26093567811613,Ultra-High Speed Research Network - Round Robin
+Path Utilization Ratio (%),1.1241707254844746,,,Ultra-High Speed Research Network - Round Robin
+Delivery Efficiency (%),0.0,0.0,,Ultra-High Speed Research Network - Round Robin
+Buffer Length (ms),78.2328,56442.7,-99.86139429899704,Ultra-High Speed Research Network - Round Robin
+Buffer Underruns,1.0,0.0,,Ultra-High Speed Research Network - Round Robin
+Throughput (Mbps),273.17348630090913,171.6714081875,59.12579105924749,Ultra-High Speed Research Network - Frame Aware
+Delay (seconds),0.005750759375,0.0057676928125,0.29359118195929396,Ultra-High Speed Research Network - Frame Aware
+Loss (%),0.0,0.0,,Ultra-High Speed Research Network - Frame Aware
+Jitter (seconds),3.6703868019935626e-07,2.7559900010625e-06,86.68214761091826,Ultra-High Speed Research Network - Frame Aware
+Estimated MOS (1-5),4.976967768265674,4.9767100212062125,0.005179065253219811,Ultra-High Speed Research Network - Frame Aware
+Throughput Stability (stddev),391.32261600496497,211.22780934686918,-85.26093567649129,Ultra-High Speed Research Network - Frame Aware
+Path Utilization Ratio (%),1.1241707255181446,,,Ultra-High Speed Research Network - Frame Aware
+Delivery Efficiency (%),0.0,0.0,,Ultra-High Speed Research Network - Frame Aware
+Buffer Length (ms),78.2328,56442.7,-99.86139429899704,Ultra-High Speed Research Network - Frame Aware
+Buffer Underruns,1.0,0.0,,Ultra-High Speed Research Network - Frame Aware
+Throughput (Mbps),273.1734863018182,171.6714081875,59.12579105977702,Ultra-High Speed Research Network - Buffer_Aware
+Delay (seconds),0.005750759375,0.0057676928125,0.29359118195929396,Ultra-High Speed Research Network - Buffer_Aware
+Loss (%),0.0,0.0,,Ultra-High Speed Research Network - Buffer_Aware
+Jitter (seconds),3.6711148957435627e-07,2.7559900010625e-06,86.67950575173255,Ultra-High Speed Research Network - Buffer_Aware
+Estimated MOS (1-5),4.9769677624744215,4.9767100212062125,0.005178948886126169,Ultra-High Speed Research Network - Buffer_Aware
+Throughput Stability (stddev),391.3226160024311,211.22780934686918,-85.2609356752917,Ultra-High Speed Research Network - Buffer_Aware
+Path Utilization Ratio (%),1.1241707255218856,,,Ultra-High Speed Research Network - Buffer_Aware
+Delivery Efficiency (%),0.0,0.0,,Ultra-High Speed Research Network - Buffer_Aware
+Buffer Length (ms),78.2328,56442.7,-99.86139429899704,Ultra-High Speed Research Network - Buffer_Aware
+Buffer Underruns,1.0,0.0,,Ultra-High Speed Research Network - Buffer_Aware

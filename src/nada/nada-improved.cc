@@ -95,10 +95,52 @@ NadaCongestionControl::Init(Ptr<Socket> socket)
     NS_LOG_FUNCTION(this << socket);
     m_socket = socket;
 
+    // Use default rate - will be set properly by SetInitialRate
+    NS_LOG_INFO("NADA initialized with default rate: " << m_currentRate/1000000.0 << " Mbps");
+
     // Schedule periodic updates
-    m_updateEvent =
-        Simulator::Schedule(MilliSeconds(100), &NadaCongestionControl::PeriodicUpdate, this);
+    m_updateEvent = Simulator::Schedule(MilliSeconds(100),
+                                       &NadaCongestionControl::PeriodicUpdate, this);
 }
+
+void
+NadaCongestionControl::SetInitialRate(DataRate linkCapacity)
+{
+    NS_LOG_FUNCTION(this << linkCapacity);
+
+    double linkBps = linkCapacity.GetBitRate();
+    double initialRate;
+
+    if (linkBps >= 1e9) { // 1Gbps+
+        // Start at 25% for high-speed links
+        initialRate = linkBps * 0.25;
+        NS_LOG_INFO("High-speed link detected (" << linkBps/1e9
+                   << " Gbps), starting NADA at " << initialRate/1e6 << " Mbps");
+    } else if (linkBps >= 100e6) { // 100Mbps+
+        // Start at 15%
+        initialRate = linkBps * 0.15;
+        NS_LOG_INFO("Medium-speed link detected (" << linkBps/1e6
+                   << " Mbps), starting NADA at " << initialRate/1e6 << " Mbps");
+    } else {
+        // Start at 10%
+        initialRate = linkBps * 0.1;
+        NS_LOG_INFO("Standard link detected (" << linkBps/1e6
+                   << " Mbps), starting NADA at " << initialRate/1e6 << " Mbps");
+    }
+
+    // Ensure bounds
+    initialRate = std::max(initialRate, m_minRate);
+    initialRate = std::min(initialRate, m_maxRate);
+
+    m_currentRate = initialRate;
+
+    // Update max rate based on link capacity (leave 5% headroom)
+    m_maxRate = std::min(m_maxRate, linkBps * 0.95);
+
+    NS_LOG_INFO("NADA initial rate set to: " << m_currentRate/1000000.0 << " Mbps"
+               << ", max rate: " << m_maxRate/1000000.0 << " Mbps");
+}
+
 
 void
 NadaCongestionControl::ProcessAck(Ptr<Packet> ack, Time delay)
@@ -129,53 +171,96 @@ NadaCongestionControl::ProcessLoss(double lossRate)
     }
 }
 
-// In NadaCongestionControl::UpdateRate() function
 DataRate
 NadaCongestionControl::UpdateRate()
 {
     NS_LOG_FUNCTION(this);
 
-    // Calculate current congestion score
     double score = CalculateScore();
-
     Time now = Simulator::Now();
     double deltaT = (now - m_lastUpdateTime).GetSeconds();
     m_lastUpdateTime = now;
 
+    if (deltaT <= 0 || deltaT > 1.0) {
+        deltaT = 0.1;
+    }
+
     double newRate = m_currentRate;
 
-    // Make NADA less aggressive
-    if (score < 0.1)
-    {
-        // Reduce the ramp-up factor to be less aggressive
-        double rampUpFactor = 1.0 + (m_delta * 0.5) * (0.1 - score) * deltaT;
-        newRate = m_currentRate * rampUpFactor;
-    }
-    else if (score < 0.5)
-    {
-        // More conservative for light congestion
-        double gradientFactor = 1.0 - (m_beta * 1.5) * (score - 0.1) * deltaT;
-        newRate = m_currentRate * gradientFactor + m_alpha * deltaT;
-    }
-    else
-    {
-        // More aggressive reduction for heavy congestion
-        double reductionFactor = 1.0 - (m_beta * 2) * (score - 0.1) * deltaT;
-        newRate = m_currentRate * reductionFactor;
+    // Adaptive parameters based on network capacity
+    double adaptiveGamma = m_gamma;
+    double adaptiveBeta = m_beta;
+
+    // For high-capacity networks, use more aggressive parameters
+    if (m_maxRate >= 1e9) { // 1Gbps+
+        adaptiveGamma = m_gamma * 5.0;  // 5x faster increase
+        adaptiveBeta = m_beta * 1.2;    // Slightly more aggressive decrease
+
+        // Early ramp-up phase: be very aggressive if we're far below capacity
+        double utilizationRatio = m_currentRate / m_maxRate;
+        if (utilizationRatio < 0.3 && score < 0.3) { // Low utilization, low congestion
+            adaptiveGamma = m_gamma * 20.0; // 20x faster ramp-up
+            NS_LOG_DEBUG("Fast ramp-up mode: utilization=" << utilizationRatio
+                        << ", score=" << score);
+        }
+    } else if (m_maxRate >= 100e6) { // 100Mbps+
+        adaptiveGamma = m_gamma * 2.0;  // 2x faster increase
     }
 
-    // Impose tighter bounds
-    if (newRate > m_maxRate)
-    {
-        newRate = m_maxRate;
+    // Apply rate control logic with adaptive parameters
+    if (score < 0.1) {
+        // Low congestion: increase rate
+        double increaseRate = m_currentRate * adaptiveGamma * deltaT;
+
+        // For high-speed links, allow larger jumps during ramp-up
+        if (m_maxRate >= 1e9 && m_currentRate < m_maxRate * 0.5) {
+            increaseRate = std::min(increaseRate, m_currentRate * 0.5); // Max 50% increase
+        } else {
+            increaseRate = std::min(increaseRate, m_currentRate * 0.1); // Max 10% increase
+        }
+
+        newRate = m_currentRate + increaseRate;
     }
-    else if (newRate < m_minRate)
-    {
-        newRate = m_minRate;
+    else if (score < 0.5) {
+        // Moderate congestion: small adjustments
+        double factor = 1.0 - (adaptiveBeta * 0.5) * score * deltaT;
+        newRate = m_currentRate * factor;
+    }
+    else {
+        // High congestion: decrease
+        double factor = 1.0 - (adaptiveBeta * 1.5) * score * deltaT;
+        newRate = m_currentRate * factor;
+
+        if (score > 0.8) {
+            newRate = std::min(newRate, m_currentRate * 0.8);
+        }
     }
 
-    // Set current rate
-    m_currentRate = newRate;
+    // Apply bounds
+    newRate = std::max(newRate, m_minRate);
+    newRate = std::min(newRate, m_maxRate);
+
+    // Adaptive smoothing based on network capacity
+    double smoothingFactor = 0.3;
+    if (m_maxRate >= 1e9) { // 1Gbps+
+        smoothingFactor = 0.7; // Less smoothing for faster adaptation
+    } else if (m_maxRate >= 100e6) { // 100Mbps+
+        smoothingFactor = 0.5;
+    }
+
+    double oldRate = m_currentRate;
+    m_currentRate = (1.0 - smoothingFactor) * m_currentRate + smoothingFactor * newRate;
+
+    // Video-specific adaptations
+    if (m_videoMode) {
+        m_currentRate = ApplyVideoAdaptation(m_currentRate);
+    }
+
+    NS_LOG_DEBUG("NADA rate update: score=" << score
+                << ", old=" << oldRate/1000000.0 << "Mbps"
+                << ", new=" << m_currentRate/1000000.0 << "Mbps"
+                << ", capacity=" << m_maxRate/1000000.0 << "Mbps");
+
     return DataRate(m_currentRate);
 }
 
@@ -184,11 +269,24 @@ NadaCongestionControl::PeriodicUpdate()
 {
     NS_LOG_FUNCTION(this);
 
-    // Update sending rate without storing unused value
     UpdateRate();
 
-    // Schedule next update - RFC recommends once per RTT or 100ms min
-    Time updateInterval = std::max(m_rtt, MilliSeconds(100));
+    // Adaptive update interval based on network capacity and current state
+    Time updateInterval;
+
+    if (m_maxRate >= 1e9) { // 1Gbps+
+        // Fast updates during ramp-up phase
+        double utilizationRatio = m_currentRate / m_maxRate;
+        if (utilizationRatio < 0.5) {
+            updateInterval = MilliSeconds(50); // 50ms during ramp-up
+        } else {
+            updateInterval = MilliSeconds(100); // 100ms during steady state
+        }
+    } else {
+        // RFC recommends once per RTT or 100ms min
+        updateInterval = std::max(m_rtt, MilliSeconds(100));
+    }
+
     m_updateEvent = Simulator::Schedule(updateInterval,
                                        &NadaCongestionControl::PeriodicUpdate,
                                        this);
@@ -197,31 +295,40 @@ NadaCongestionControl::PeriodicUpdate()
 double
 NadaCongestionControl::CalculateScore()
 {
-    // RFC 8698 Section 4.1
     double queueDelay = EstimateQueueingDelay();
-    double referenceDelay = 0.010; // 10ms threshold from RFC
+    double referenceDelay = m_referenceDelay;
 
-    // Calculate x_n term (normalized queuing delay)
-    double xn = queueDelay / 0.100; // normalized by reference of 100ms
+    // Enhanced congestion scoring with better sensitivity
+    double xn = queueDelay / 0.100; // Normalize by 100ms reference
 
-    // RFC 8698 Section 4.1 congestion score function
     double score = 0.0;
-    if (queueDelay <= referenceDelay)
-    {
-        // Gradual, non-zero congestion score for small delays
-        score = 0.5 * xn;
-    }
-    else
-    {
-        // Steeper rise for delays above the threshold
-        score = 0.5 + (xn - 0.1) * (1 - 0.5) / 0.9;
+
+    // More responsive scoring function
+    if (queueDelay <= referenceDelay) {
+        // Very light congestion
+        score = 0.1 * xn;
+    } else if (queueDelay <= 2 * referenceDelay) {
+        // Light to moderate congestion
+        score = 0.1 + 0.3 * (xn - 0.1);
+    } else {
+        // Heavy congestion
+        score = 0.4 + 0.6 * std::min(1.0, (xn - 0.2) / 0.8);
     }
 
-    // Add loss penalty (kappa = 20.0 from the RFC)
-    if (m_lossRate > 0.0)
-    {
-        score += m_lossRate * 20.0;
+    // Add loss penalty with better scaling
+    if (m_lossRate > 0.0) {
+        double lossPenalty = std::min(0.5, m_lossRate * 10.0); // Cap loss impact
+        score += lossPenalty;
     }
+
+    // Add ECN penalty if applicable
+    if (m_ecnMarked) {
+        score += 0.1; // Moderate penalty for ECN
+        m_ecnMarked = false; // Reset ECN flag
+    }
+
+    // Ensure score is in valid range
+    score = std::max(0.0, std::min(1.0, score));
 
     return score;
 }

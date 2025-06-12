@@ -25,7 +25,7 @@ UdpNadaClient::GetTypeId(void)
                                           "Size of packets generated",
                                           UintegerValue(1024),
                                           MakeUintegerAccessor(&UdpNadaClient::m_packetSize),
-                                          MakeUintegerChecker<uint32_t>(1, 1500))
+                                          MakeUintegerChecker<uint32_t>())
                             .AddAttribute("MaxPackets",
                                           "The maximum number of packets the app will send",
                                           UintegerValue(0),
@@ -367,8 +367,8 @@ UdpNadaClient::HandleRead(Ptr<Socket> socket)
     {
         if (packet->GetSize() < NadaHeader::GetStaticSize())
         {
-            NS_LOG_WARN("Received packet too small (size: " << packet->GetSize()
-                                                           << ") to contain a NadaHeader. Discarding.");
+            NS_LOG_WARN("Received packet too small (size: "
+                        << packet->GetSize() << ") to contain a NadaHeader. Discarding.");
             continue; // Skip this packet
         }
 
@@ -404,6 +404,34 @@ UdpNadaClient::HandleRead(Ptr<Socket> socket)
             }
         }
     }
+}
+
+void
+UdpNadaClient::SetPacketSize(uint32_t size)
+{
+    NS_LOG_FUNCTION(this << size);
+    m_packetSize = size;
+    NS_LOG_DEBUG("Packet size set to " << size << " bytes");
+}
+
+void
+UdpNadaClient::SetMaxPackets(uint32_t maxPackets)
+{
+    NS_LOG_FUNCTION(this << maxPackets);
+    m_numPackets = maxPackets;
+    NS_LOG_DEBUG("Max packets set to " << maxPackets);
+}
+
+uint32_t
+UdpNadaClient::GetPacketSize() const
+{
+    return m_packetSize;
+}
+
+uint32_t
+UdpNadaClient::GetMaxPackets() const
+{
+    return m_numPackets;
 }
 
 UdpNadaClientHelper::UdpNadaClientHelper(Address address, uint16_t port)

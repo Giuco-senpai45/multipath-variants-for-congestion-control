@@ -32,7 +32,7 @@ MultiPathNadaClient::GetTypeId(void)
                           "Size of packets generated",
                           UintegerValue(1024),
                           MakeUintegerAccessor(&MultiPathNadaClient::m_packetSize),
-                          MakeUintegerChecker<uint32_t>(1, 1500))
+                          MakeUintegerChecker<uint32_t>())
             .AddAttribute("MaxPackets",
                           "The maximum number of packets the app will send",
                           UintegerValue(0),
@@ -47,7 +47,7 @@ MultiPathNadaClient::GetTypeId(void)
                           "Strategy for path selection (0=weighted, 1=best path, 2=equal)",
                           UintegerValue(0),
                           MakeUintegerAccessor(&MultiPathNadaClient::m_pathSelectionStrategy),
-                          MakeUintegerChecker<uint32_t>(0, 4));
+                          MakeUintegerChecker<uint32_t>(0, 5));
     return tid;
 }
 
@@ -63,7 +63,10 @@ MultiPathNadaClient::MultiPathNadaClient()
       m_updateInterval(MilliSeconds(200)),
       m_pathSelectionStrategy(WEIGHTED),
       m_totalPacketsSent(0),
-      m_lastUpdateTime(Seconds(0))
+      m_lastUpdateTime(Seconds(0)),
+      m_videoReceiver(nullptr),
+      m_targetBufferLength(3.0),
+      m_bufferWeightFactor(0.3)
 {
     NS_LOG_FUNCTION(this);
 }
@@ -276,84 +279,82 @@ MultiPathNadaClient::InitializePathSocket(uint32_t pathId)
     NS_LOG_FUNCTION(this << pathId);
 
     std::map<uint32_t, PathInfo>::iterator it = m_paths.find(pathId);
-    if (it == m_paths.end())
+    if (it == m_paths.end() || !it->second.client)
     {
-        NS_LOG_ERROR("Path " << pathId << " not found in InitializePathSocket");
+        NS_LOG_ERROR("Path " << pathId << " not found or has null client");
         return;
     }
 
-    if (!it->second.client)
-    {
-        NS_LOG_ERROR("Path " << pathId << " has null client");
-        return;
-    }
-
-    // More aggressive socket creation and initialization
     NS_LOG_INFO("Initializing socket for path " << pathId);
 
-    // Get the node and create a UDP socket
+    // **FIX: Create UDP socket properly**
     Ptr<Node> node = GetNode();
+    if (!node)
+    {
+        NS_LOG_ERROR("Node is null for path " << pathId);
+        return;
+    }
+
     Ptr<Socket> socket = Socket::CreateSocket(node, UdpSocketFactory::GetTypeId());
+    if (!socket)
+    {
+        NS_LOG_ERROR("Failed to create socket for path " << pathId);
+        return;
+    }
 
-    // Set receive buffer size
-    socket->SetAttribute("RcvBufSize", UintegerValue(1000000));
-
-    // Bind to the local address - use any port if not specified
+    // **CRITICAL FIX: Proper address binding**
     if (InetSocketAddress::IsMatchingType(it->second.localAddress))
     {
         InetSocketAddress localAddr = InetSocketAddress::ConvertFrom(it->second.localAddress);
-        // Ensure we have a valid port
+
+        // Use path-specific port to avoid conflicts
         if (localAddr.GetPort() == 0)
         {
-            localAddr = InetSocketAddress(localAddr.GetIpv4(), 0); // Use any port
+            localAddr.SetPort(9000 + pathId);
         }
-        socket->Bind(localAddr);
-    }
-    else if (Inet6SocketAddress::IsMatchingType(it->second.localAddress))
-    {
-        Inet6SocketAddress localAddr = Inet6SocketAddress::ConvertFrom(it->second.localAddress);
-        if (localAddr.GetPort() == 0)
+
+        int bindResult = socket->Bind(localAddr);
+        if (bindResult != 0)
         {
-            localAddr = Inet6SocketAddress(localAddr.GetIpv6(), 0); // Use any port
+            NS_LOG_ERROR("Failed to bind socket for path " << pathId << " to " << localAddr);
+            return;
         }
-        socket->Bind(localAddr);
+        NS_LOG_INFO("Socket bound to " << localAddr);
     }
 
-    // Connect to the remote address
+    // **CRITICAL FIX: Proper connection**
     if (InetSocketAddress::IsMatchingType(it->second.remoteAddress))
     {
         InetSocketAddress remoteAddr = InetSocketAddress::ConvertFrom(it->second.remoteAddress);
-        socket->Connect(remoteAddr);
-    }
-    else if (Inet6SocketAddress::IsMatchingType(it->second.remoteAddress))
-    {
-        Inet6SocketAddress remoteAddr = Inet6SocketAddress::ConvertFrom(it->second.remoteAddress);
-        socket->Connect(remoteAddr);
+        int connectResult = socket->Connect(remoteAddr);
+        if (connectResult != 0)
+        {
+            NS_LOG_ERROR("Failed to connect socket for path " << pathId << " to " << remoteAddr);
+            return;
+        }
+        NS_LOG_INFO("Socket connected to " << remoteAddr);
     }
 
-    // Set up receive callback
+    // Set receive callback
     socket->SetRecvCallback(MakeCallback(&MultiPathNadaClient::HandleRecv, this));
 
-    // Store the socket in the client
+    // **CRITICAL FIX: Store socket in client properly**
     it->second.client->SetSocket(socket);
-
-    // Map the socket to the path
     m_socketToPathId[socket] = pathId;
 
-    // Send a test packet that won't be mistaken for a NADA packet
-    Ptr<Packet> testPacket = Create<Packet>(32); // Smaller size
-    try
+    // **CRITICAL FIX: Initialize NADA with socket**
+    if (it->second.nada)
     {
-        socket->Send(testPacket);
-        NS_LOG_INFO("Test packet sent on path " << pathId << " during initialization");
-    }
-    catch (const std::exception& e)
-    {
-        NS_LOG_ERROR("Failed to send test packet: " << e.what());
+        it->second.nada->Init(socket);
+
+        // Set initial rate based on path capacity
+        DataRate pathRate = it->second.currentRate;
+        it->second.nada->SetInitialRate(pathRate);
+
+        NS_LOG_INFO("NADA initialized for path " << pathId << " with rate " << pathRate);
     }
 
-    // Schedule a follow-up check to validate socket
-    Simulator::Schedule(MilliSeconds(100), &MultiPathNadaClient::ValidatePathSocket, this, pathId);
+    NS_LOG_INFO("Path " << pathId << " socket initialized successfully");
 }
 
 void
@@ -733,201 +734,340 @@ MultiPathNadaClient::SendRedundantlyPath(const std::vector<uint32_t>& readyPaths
     return anySuccess;
 }
 
+double
+MultiPathNadaClient::CalculateBufferWeight(double currentBufferMs, uint32_t pathId)
+{
+    NS_LOG_FUNCTION(this << currentBufferMs << pathId);
+
+    double targetBufferMs = m_targetBufferLength * 1000.0;
+    double bufferDiff = currentBufferMs - targetBufferMs;
+
+    // Get path RTT for responsiveness calculation
+    std::map<uint32_t, PathInfo>::iterator it = m_paths.find(pathId);
+    if (it == m_paths.end())
+    {
+        return 0.5; // Default weight if path not found
+    }
+
+    double pathRttMs = it->second.lastRtt.GetMilliSeconds();
+
+    // Calculate urgency based on buffer status
+    double urgencyFactor = 1.0;
+
+    if (bufferDiff < -1000.0) // Buffer very low (< target - 1s)
+    {
+        // High urgency: favor fast paths (low RTT, high rate)
+        urgencyFactor = 2.0 / (1.0 + pathRttMs / 50.0); // Favor paths with RTT < 50ms
+        NS_LOG_INFO("Buffer very low, high urgency for path "
+                    << pathId << " (RTT=" << pathRttMs << "ms, urgency=" << urgencyFactor << ")");
+    }
+    else if (bufferDiff < -500.0) // Buffer low (< target - 0.5s)
+    {
+        // Medium urgency: slightly favor faster paths
+        urgencyFactor = 1.5 / (1.0 + pathRttMs / 100.0);
+        NS_LOG_INFO("Buffer low, medium urgency for path " << pathId);
+    }
+    else if (bufferDiff > 1000.0) // Buffer high (> target + 1s)
+    {
+        // Low urgency: can afford to use slower paths for load balancing
+        urgencyFactor = 0.8 + 0.4 * (pathRttMs / 200.0);
+        urgencyFactor = std::min(urgencyFactor, 1.2);
+        NS_LOG_INFO("Buffer high, low urgency for path " << pathId);
+    }
+    else
+    {
+        // Normal buffer level: balanced approach
+        urgencyFactor = 1.0;
+    }
+
+    // Combine with path quality metrics
+    double rttWeight = 100.0 / (pathRttMs + 10.0); // Lower RTT = higher weight
+    double finalWeight = urgencyFactor * rttWeight;
+
+    // Normalize to reasonable range [0.1, 2.0]
+    finalWeight = std::max(0.1, std::min(2.0, finalWeight));
+
+    return finalWeight;
+}
+
+uint32_t
+MultiPathNadaClient::GetBufferAwarePath(const std::vector<uint32_t>& readyPaths)
+{
+    NS_LOG_FUNCTION(this);
+
+    if (readyPaths.empty())
+    {
+        NS_LOG_ERROR("GetBufferAwarePath called with empty path list");
+        return 0;
+    }
+
+    if (readyPaths.size() == 1)
+    {
+        NS_LOG_INFO("Only one path available, returning path " << readyPaths[0]);
+        return readyPaths[0];
+    }
+
+    if (!m_videoReceiver)
+    {
+        NS_LOG_WARN("VideoReceiver not set, using default buffer behavior");
+        return GetWeightedPath(readyPaths);
+    }
+
+    // Get current buffer length from video receiver
+    double currentBufferMs = 0.0;
+    if (m_videoReceiver)
+    {
+        currentBufferMs = m_videoReceiver->GetAverageBufferLength();
+    }
+
+    NS_LOG_INFO("Current buffer length: " << currentBufferMs << "ms, target: "
+                                          << (m_targetBufferLength * 1000) << "ms");
+
+    // Calculate combined weights for each path
+    std::map<uint32_t, double> pathWeights;
+    double totalWeight = 0.0;
+
+    for (auto pathId : readyPaths)
+    {
+        std::map<uint32_t, PathInfo>::iterator it = m_paths.find(pathId);
+        if (it == m_paths.end())
+        {
+            NS_LOG_WARN("Path " << pathId << " not found in m_paths");
+            continue;
+        }
+
+        // Get NADA send rate for this path
+        DataRate nadaRate = it->second.nada->UpdateRate();
+        double rateMbps = nadaRate.GetBitRate() / 1000000.0;
+
+        // Calculate buffer-based weight
+        double bufferWeight = CalculateBufferWeight(currentBufferMs, pathId);
+
+        // Combine rate and buffer weights
+        double rateWeight = rateMbps / 10.0; // Normalize assuming max ~10 Mbps
+        double combinedWeight =
+            (1.0 - m_bufferWeightFactor) * rateWeight + m_bufferWeightFactor * bufferWeight;
+
+        // Apply minimum weight to avoid starvation
+        combinedWeight = std::max(combinedWeight, 0.01);
+
+        pathWeights[pathId] = combinedWeight;
+        totalWeight += combinedWeight;
+
+        NS_LOG_INFO("Path " << pathId << " weights: rate=" << rateWeight
+                            << ", buffer=" << bufferWeight << ", combined=" << combinedWeight
+                            << " (NADA rate=" << rateMbps << "Mbps)");
+    }
+
+    // Safety check
+    if (pathWeights.empty() || totalWeight <= 0.0)
+    {
+        NS_LOG_WARN("No valid path weights calculated, using first available path");
+        return readyPaths[0];
+    }
+
+    // Normalize weights and select path
+    Ptr<UniformRandomVariable> rng = CreateObject<UniformRandomVariable>();
+    double r = rng->GetValue(0.0, 1.0);
+    double cumulativeProb = 0.0;
+
+    for (auto pathId : readyPaths)
+    {
+        if (pathWeights.find(pathId) == pathWeights.end())
+        {
+            continue;
+        }
+
+        double normalizedWeight = pathWeights[pathId] / totalWeight;
+        cumulativeProb += normalizedWeight;
+
+        // Update path weight for statistics
+        std::map<uint32_t, PathInfo>::iterator pathIt = m_paths.find(pathId);
+        if (pathIt != m_paths.end())
+        {
+            pathIt->second.weight = normalizedWeight;
+        }
+
+        if (r <= cumulativeProb)
+        {
+            NS_LOG_INFO("Selected path " << pathId << " (normalized weight=" << normalizedWeight
+                                         << ")");
+            return pathId;
+        }
+    }
+
+    // Fallback
+    NS_LOG_WARN("Selection failed, returning first path");
+    return readyPaths[0];
+}
+
 void
 MultiPathNadaClient::UpdatePathDistribution(void)
 {
     NS_LOG_FUNCTION(this);
 
-    // First handle any unavailable paths
-    for (auto pathIt = m_paths.begin(); pathIt != m_paths.end();)
-    {
-        if (!IsSocketReady(pathIt->second.client->GetSocket()))
-        {
-            // Mark path as temporarily unavailable
-            pathIt->second.weight *= 0.5; // Reduce weight of problematic paths
+    // Collect current network metrics for all paths
+    std::map<uint32_t, double> pathMetrics;
+    double totalUtilization = 0.0;
+
+    for (auto& pathPair : m_paths) {
+        uint32_t pathId = pathPair.first;
+        PathInfo& pathInfo = pathPair.second;
+
+        // Update NADA rate for this path
+        DataRate nadaRate = pathInfo.nada->UpdateRate();
+        pathInfo.currentRate = nadaRate;
+
+        // Calculate path utilization and quality metrics
+        double pathUtilization = 0.0;
+        if (pathInfo.packetsSent > 0) {
+            pathUtilization = static_cast<double>(pathInfo.packetsAcked) / pathInfo.packetsSent;
         }
-        ++pathIt;
+
+        // Calculate comprehensive path quality score
+        double rttScore = 1.0 / (1.0 + pathInfo.lastRtt.GetMilliSeconds() / 100.0); // Normalize by 100ms
+        double rateScore = nadaRate.GetBitRate() / 10000000.0; // Normalize by 10Mbps
+        double utilizationScore = pathUtilization;
+
+        // Combined quality metric
+        double qualityScore = (rttScore * 0.3 + rateScore * 0.4 + utilizationScore * 0.3);
+        pathMetrics[pathId] = qualityScore;
+        totalUtilization += pathUtilization;
+
+        NS_LOG_INFO("Path " << pathId << " metrics: RTT=" << pathInfo.lastRtt.GetMilliSeconds()
+                   << "ms, Rate=" << nadaRate.GetBitRate()/1000000.0 << "Mbps, "
+                   << "Utilization=" << pathUtilization << ", Quality=" << qualityScore);
     }
 
-    // Update weights based on current strategy
-    std::vector<uint32_t> readyPaths;
-    for (const auto& pathPair : m_paths)
-    {
-        if (IsSocketReady(pathPair.second.client->GetSocket()))
-        {
-            readyPaths.push_back(pathPair.first);
-        }
-    }
-
-    // If we have ready paths, update weights based on the strategy
-    if (!readyPaths.empty())
-    {
-        switch (m_pathSelectionStrategy)
-        {
-            case EQUAL:
-            {
-                // Set equal weights for all ready paths
-                double equalWeight = 1.0 / readyPaths.size();
-                NS_LOG_INFO("EQUAL strategy: Setting weight " << equalWeight << " for all paths");
-
-                for (uint32_t pathId : readyPaths)
-                {
-                    m_paths[pathId].weight = equalWeight;
-                }
-                break;
+    // Update weights based on strategy and current metrics
+    switch (m_pathSelectionStrategy) {
+        case WEIGHTED: {
+            // Dynamic weight adjustment based on quality metrics
+            double totalQuality = 0.0;
+            for (auto& metric : pathMetrics) {
+                totalQuality += metric.second;
             }
 
-            case BEST_PATH:
-            {
-                // GetBestPath already updates the weights, just call it to update
-                // but use a separate random draw to avoid affecting the actual path selection
-                NS_LOG_INFO("BEST_PATH strategy: Updating path weights based on metrics");
-                GetBestPath(readyPaths);
-                break;
+            if (totalQuality > 0) {
+                for (auto& pathPair : m_paths) {
+                    uint32_t pathId = pathPair.first;
+                    double normalizedWeight = pathMetrics[pathId] / totalQuality;
+                    // Smooth weight changes to avoid oscillation
+                    double currentWeight = pathPair.second.weight;
+                    double newWeight = 0.7 * currentWeight + 0.3 * normalizedWeight;
+                    pathPair.second.weight = newWeight;
+                }
+            }
+            break;
+        }
+
+        case BEST_PATH: {
+            // Find best path and give it higher weight
+            uint32_t bestPath = 0;
+            double bestQuality = 0.0;
+            for (auto& metric : pathMetrics) {
+                if (metric.second > bestQuality) {
+                    bestQuality = metric.second;
+                    bestPath = metric.first;
+                }
             }
 
-            case WEIGHTED:
-                // Weights are already set based on configuration
-                NS_LOG_INFO("WEIGHTED strategy: Using configured weights");
-                break;
-
-            case REDUNDANT:
-                // For redundant, normalize weights to sum to 1 for statistics
-                {
-                    double totalWeight = 0.0;
-                    for (uint32_t pathId : readyPaths)
-                    {
-                        totalWeight += m_paths[pathId].weight;
-                    }
-
-                    if (totalWeight > 0)
-                    {
-                        for (uint32_t pathId : readyPaths)
-                        {
-                            m_paths[pathId].weight /= totalWeight;
-                        }
-                    }
-                    else
-                    {
-                        // If total weight is 0, use equal weights
-                        double equalWeight = 1.0 / readyPaths.size();
-                        for (uint32_t pathId : readyPaths)
-                        {
-                            m_paths[pathId].weight = equalWeight;
-                        }
-                    }
-                    NS_LOG_INFO("REDUNDANT strategy: Normalized weights for statistics");
+            // Give best path 80% weight, others share remaining 20%
+            for (auto& pathPair : m_paths) {
+                if (pathPair.first == bestPath) {
+                    pathPair.second.weight = 0.8;
+                } else {
+                    pathPair.second.weight = 0.2 / (m_paths.size() - 1);
                 }
-                break;
-
-            case FRAME_AWARE:
-                // Frame-aware strategy depends on the current frame type
-                // Let's use GetFrameAwarePath to update the weights for the current frame type
-                NS_LOG_INFO("FRAME_AWARE strategy: Updating weights based on current frame type");
-                if (m_isKeyFrame)
-                {
-                    // For key frames, prioritize the path with lowest RTT
-                    uint32_t bestPathId = 0;
-                    Time lowestRtt = Time::Max();
-
-                    for (uint32_t pathId : readyPaths)
-                    {
-                        if (m_paths[pathId].lastRtt < lowestRtt)
-                        {
-                            lowestRtt = m_paths[pathId].lastRtt;
-                            bestPathId = pathId;
-                        }
-                    }
-
-                    // Give higher weight to the best path
-                    if (bestPathId > 0)
-                    {
-                        for (uint32_t pathId : readyPaths)
-                        {
-                            m_paths[pathId].weight = (pathId == bestPathId) ? 0.8 : 0.2 / (readyPaths.size() - 1);
-                        }
-                    }
-                }
-                else
-                {
-                    // For delta frames, use weighted distribution
-                    // Just normalize existing weights
-                    double totalWeight = 0.0;
-                    for (uint32_t pathId : readyPaths)
-                    {
-                        totalWeight += m_paths[pathId].weight;
-                    }
-
-                    if (totalWeight > 0)
-                    {
-                        for (uint32_t pathId : readyPaths)
-                        {
-                            m_paths[pathId].weight /= totalWeight;
-                        }
-                    }
-                }
-                break;
-
-            default:
-                // Leave weights as they are
-                NS_LOG_WARN("Unknown strategy " << m_pathSelectionStrategy << ", using existing weights");
-                break;
+            }
+            break;
         }
-    }
 
-    // Calculate the total weight
-    double totalWeight = 0.0;
-    for (std::map<uint32_t, PathInfo>::iterator it = m_paths.begin(); it != m_paths.end(); ++it)
-    {
-        totalWeight += it->second.weight;
-    }
+        case BUFFER_AWARE: {
+            // Adjust weights based on buffer status
+            double currentBufferMs = 0.0;
+            if (m_videoReceiver) {
+                currentBufferMs = m_videoReceiver->GetAverageBufferLength();
+            }
 
-    if (totalWeight <= 0.0)
-    {
-        NS_LOG_WARN("Total path weight is zero or negative, using equal distribution");
-        totalWeight = m_paths.size();
-        for (std::map<uint32_t, PathInfo>::iterator it = m_paths.begin(); it != m_paths.end(); ++it)
-        {
-            it->second.weight = 1.0;
+            double targetBufferMs = m_targetBufferLength * 1000.0;
+            double bufferRatio = currentBufferMs / targetBufferMs;
+
+            // If buffer is low, prioritize fastest/most reliable paths
+            if (bufferRatio < 0.5) {
+                // Emergency mode: use best path heavily
+                uint32_t bestPath = GetBestPathByRTT();
+                for (auto& pathPair : m_paths) {
+                    if (pathPair.first == bestPath) {
+                        pathPair.second.weight = 0.9;
+                    } else {
+                        pathPair.second.weight = 0.1 / (m_paths.size() - 1);
+                    }
+                }
+                NS_LOG_WARN("Buffer critically low (" << currentBufferMs
+                           << "ms), emergency mode on path " << bestPath);
+            } else {
+                // Normal mode: balance based on quality and buffer needs
+                for (auto& pathPair : m_paths) {
+                    uint32_t pathId = pathPair.first;
+                    double bufferWeight = CalculateBufferWeight(currentBufferMs, pathId);
+                    double qualityWeight = pathMetrics[pathId];
+
+                    // Combine buffer urgency with path quality
+                    double combinedWeight = m_bufferWeightFactor * bufferWeight +
+                                          (1.0 - m_bufferWeightFactor) * qualityWeight;
+                    pathPair.second.weight = combinedWeight;
+                }
+
+                // Normalize weights
+                double totalWeight = 0.0;
+                for (auto& pathPair : m_paths) {
+                    totalWeight += pathPair.second.weight;
+                }
+                if (totalWeight > 0) {
+                    for (auto& pathPair : m_paths) {
+                        pathPair.second.weight /= totalWeight;
+                    }
+                }
+            }
+            break;
         }
+
+        default:
+            // Keep existing weights for other strategies
+            break;
     }
 
-    // Update the total sending rate
+    // Calculate and log total effective rate
     double totalRateBps = 0.0;
-    for (std::map<uint32_t, PathInfo>::iterator it = m_paths.begin(); it != m_paths.end(); ++it)
-    {
-        DataRate nadaRate = it->second.nada->UpdateRate();
-        if (nadaRate.GetBitRate() < 100000)
-        { // Less than 100 kbps
-            NS_LOG_WARN("NADA rate too low for path " << it->first << ", using minimum rate");
-            nadaRate = DataRate("100kbps");
-        }
-        it->second.currentRate = nadaRate;
-        totalRateBps += nadaRate.GetBitRate();
+    for (auto& pathPair : m_paths) {
+        totalRateBps += pathPair.second.currentRate.GetBitRate();
     }
-
-    // Set a minimum total rate
-    if (totalRateBps < 500000)
-    { // Less than 500 kbps
-        NS_LOG_WARN("Total rate too low (" << totalRateBps / 1000 << " kbps), using minimum rate");
-        totalRateBps = 500000; // 500 kbps minimum
-    }
-
     m_totalRate = DataRate(totalRateBps);
 
-    // Log the current path distribution
-    NS_LOG_INFO("Path distribution update at " << Simulator::Now().GetSeconds() << "s:");
-    for (std::map<uint32_t, PathInfo>::iterator it = m_paths.begin(); it != m_paths.end(); ++it)
-    {
-        double pathShare = it->second.weight / totalWeight;
-        NS_LOG_INFO("  Path " << it->first << ": weight=" << it->second.weight << " ("
-                              << pathShare * 100.0 << "%), rate="
-                              << it->second.currentRate.GetBitRate() / 1000000.0 << " Mbps");
+    NS_LOG_INFO("Updated path distribution - Total rate: "
+               << totalRateBps/1000000.0 << " Mbps, Total utilization: "
+               << totalUtilization/m_paths.size());
+
+    // Schedule next update
+    m_updateEvent = Simulator::Schedule(m_updateInterval,
+                                       &MultiPathNadaClient::UpdatePathDistribution, this);
+}
+
+uint32_t
+MultiPathNadaClient::GetBestPathByRTT()
+{
+    uint32_t bestPath = 0;
+    Time lowestRtt = Time::Max();
+
+    for (auto& pathPair : m_paths) {
+        if (pathPair.second.lastRtt < lowestRtt) {
+            lowestRtt = pathPair.second.lastRtt;
+            bestPath = pathPair.first;
+        }
     }
 
-    // Schedule next update using the configured interval
-    m_updateEvent =
-        Simulator::Schedule(m_updateInterval, &MultiPathNadaClient::UpdatePathDistribution, this);
+    return bestPath;
 }
 
 void
@@ -935,7 +1075,7 @@ MultiPathNadaClient::SetPathSelectionStrategy(uint32_t strategy)
 {
     NS_LOG_FUNCTION(this << strategy);
 
-    if (strategy > FRAME_AWARE)
+    if (strategy > BUFFER_AWARE)
     {
         NS_LOG_WARN("Invalid strategy value " << strategy << ", using WEIGHTED (0)");
         m_pathSelectionStrategy = WEIGHTED;
@@ -943,7 +1083,8 @@ MultiPathNadaClient::SetPathSelectionStrategy(uint32_t strategy)
     else
     {
         m_pathSelectionStrategy = strategy;
-        NS_LOG_INFO("Path selection strategy changed to " << GetStrategyName(m_pathSelectionStrategy));
+        NS_LOG_INFO("Path selection strategy changed to "
+                    << GetStrategyName(m_pathSelectionStrategy));
     }
 
     // Update path weights immediately based on the new strategy
@@ -956,18 +1097,20 @@ MultiPathNadaClient::GetStrategyName(uint32_t strategy) const
 {
     switch (strategy)
     {
-        case WEIGHTED:
-            return "WEIGHTED";
-        case BEST_PATH:
-            return "BEST_PATH";
-        case EQUAL:
-            return "EQUAL";
-        case REDUNDANT:
-            return "REDUNDANT";
-        case FRAME_AWARE:
-            return "FRAME_AWARE";
-        default:
-            return "UNKNOWN";
+    case WEIGHTED:
+        return "WEIGHTED";
+    case BEST_PATH:
+        return "BEST_PATH";
+    case EQUAL:
+        return "EQUAL";
+    case REDUNDANT:
+        return "REDUNDANT";
+    case FRAME_AWARE:
+        return "FRAME_AWARE";
+    case BUFFER_AWARE:
+        return "BUFFER_AWARE";
+    default:
+        return "UNKNOWN";
     }
 }
 
@@ -976,343 +1119,61 @@ MultiPathNadaClient::SendPacketOnPath(uint32_t pathId, Ptr<Packet> packet)
 {
     if (!packet)
     {
-        std::cout << "ERROR: Cannot send null packet" << std::endl;
         return false;
     }
 
-    // Find the path info
     auto it = m_paths.find(pathId);
     if (it == m_paths.end())
     {
-        std::cout << "ERROR: Path " << pathId << " not found" << std::endl;
         return false;
     }
 
     if (!it->second.client)
     {
-        std::cout << "ERROR: Client is null for path " << pathId << std::endl;
         return false;
     }
 
-    // Get the socket
-    Ptr<Socket> socket = nullptr;
-    try
-    {
-        socket = it->second.client->GetSocket();
-    }
-    catch (const std::exception& e)
-    {
-        std::cout << "EXCEPTION getting socket: " << e.what() << std::endl;
-        return false;
-    }
-
+    Ptr<Socket> socket = it->second.client->GetSocket();
     if (!socket)
     {
-        std::cout << "ERROR: Socket is null for path " << pathId << std::endl;
         return false;
     }
 
-    // Check socket validity
-    Socket::SocketErrno error = Socket::ERROR_NOTERROR;
-    try
+    // More lenient socket readiness check for sending
+    if (socket->GetTxAvailable() == 0)
     {
-        error = socket->GetErrno();
-
-        if (error != Socket::ERROR_NOTERROR)
-        {
-            std::cout << "ERROR: Socket has error " << error << std::endl;
-            return false;
-        }
-    }
-    catch (const std::exception& e)
-    {
-        std::cout << "EXCEPTION checking socket error: " << e.what() << std::endl;
+        NS_LOG_WARN("Path " << pathId << " socket has no TX buffer available, skipping");
         return false;
     }
 
-    // Try to send the packet
     try
     {
-        Ptr<Packet> packetToSend = Create<Packet>(500);
-        if (!packetToSend)
-        {
-            std::cout << "ERROR: Failed to create send packet" << std::endl;
-            return false;
-        }
-        int sent = socket->Send(packetToSend);
+        NadaHeader header;
+        header.SetTimestamp(Simulator::Now());
 
-        if (sent > 0)
+        packet->AddHeader(header);
+
+        // Actually send the packet
+        int result = socket->Send(packet);
+
+        if (result > 0)
         {
-            // Update statistics
             it->second.packetsSent++;
             m_totalPacketsSent++;
+            NS_LOG_DEBUG("Packet sent successfully on path " << pathId
+                        << " (total sent: " << it->second.packetsSent << ")");
             return true;
         }
         else
         {
-            std::cout << "ERROR: Send failed, error: " << socket->GetErrno() << std::endl;
+            NS_LOG_WARN("Failed to send packet on path " << pathId << ", result: " << result);
             return false;
         }
     }
     catch (const std::exception& e)
     {
-        std::cout << "EXCEPTION in socket send: " << e.what() << std::endl;
+        NS_LOG_ERROR("Exception in SendPacketOnPath: " << e.what());
         return false;
-    }
-    catch (...)
-    {
-        std::cout << "UNKNOWN EXCEPTION in socket send" << std::endl;
-        return false;
-    }
-}
-
-void
-MultiPathNadaClient::SendPackets(void)
-{
-    NS_LOG_FUNCTION(this);
-
-    if (!m_running)
-    {
-        NS_LOG_WARN("SendPackets called but client is not running");
-        return;
-    }
-
-    // Check if we've sent enough packets
-    if (m_maxPackets > 0 && m_totalPacketsSent >= m_maxPackets)
-    {
-        NS_LOG_INFO("Max packets reached (" << m_totalPacketsSent << "/" << m_maxPackets << ")");
-        return;
-    }
-
-    // Get available paths with valid sockets - use safer validation
-    std::vector<uint32_t> readyPaths;
-
-    try
-    {
-        for (auto& pathPair : m_paths)
-        {
-            // More robust path validation
-            if (pathPair.second.client != nullptr)
-            {
-                Ptr<Socket> socket = nullptr;
-
-                // Safe socket retrieval with try/catch
-                try
-                {
-                    socket = pathPair.second.client->GetSocket();
-
-                    if (socket != nullptr && socket->GetErrno() == Socket::ERROR_NOTERROR)
-                    {
-                        readyPaths.push_back(pathPair.first);
-                        NS_LOG_INFO("Path " << pathPair.first << " is ready for sending");
-                    }
-                    else
-                    {
-                        NS_LOG_WARN("Path " << pathPair.first << " has invalid socket, skipping");
-                    }
-                }
-                catch (const std::exception& e)
-                {
-                    NS_LOG_ERROR("Exception checking socket for path " << pathPair.first << ": "
-                                                                       << e.what());
-                }
-            }
-        }
-    }
-    catch (const std::exception& e)
-    {
-        NS_LOG_ERROR("Exception gathering ready paths: " << e.what());
-    }
-
-    // Safety check - if no paths are ready, reschedule and return
-    if (readyPaths.empty())
-    {
-        NS_LOG_WARN("No paths with valid sockets, retrying in 500ms");
-        if (m_sendEvent.IsPending())
-        {
-            Simulator::Cancel(m_sendEvent);
-        }
-        m_sendEvent =
-            Simulator::Schedule(MilliSeconds(500), &MultiPathNadaClient::SendPackets, this);
-        return;
-    }
-
-    // Create packet with defensive error handling
-    Ptr<Packet> packet = Create<Packet>(m_packetSize);
-    if (!packet)
-    {
-        NS_LOG_ERROR("Failed to create packet");
-        m_sendEvent =
-            Simulator::Schedule(MilliSeconds(100), &MultiPathNadaClient::SendPackets, this);
-        return;
-    }
-
-    // Select path based on strategy with robust error handling
-    uint32_t selectedPathId = 0;
-
-    try
-    {
-        switch (m_pathSelectionStrategy)
-        {
-        case BEST_PATH: {
-            // Find path with lowest RTT as a simple metric
-            Time lowestRtt = Time::Max();
-
-            for (uint32_t pathId : readyPaths)
-            {
-                auto it = m_paths.find(pathId);
-                if (it != m_paths.end() && it->second.lastRtt < lowestRtt)
-                {
-                    lowestRtt = it->second.lastRtt;
-                    selectedPathId = pathId;
-                }
-            }
-
-            // If we couldn't find a path with valid RTT data, default to first path
-            if (selectedPathId == 0 && !readyPaths.empty())
-            {
-                selectedPathId = readyPaths[0];
-                NS_LOG_WARN("Using first available path as fallback in best path strategy");
-            }
-            break;
-        }
-
-        case WEIGHTED:
-            selectedPathId = GetWeightedPath(readyPaths);
-            break;
-
-        case EQUAL: {
-            // Simple round-robin implementation with static counter
-            static uint32_t roundRobin = 0;
-            if (!readyPaths.empty())
-            {
-                selectedPathId = readyPaths[roundRobin % readyPaths.size()];
-                roundRobin++;
-            }
-            break;
-        }
-
-        case REDUNDANT: {
-            // Send on all paths and then schedule next transmission
-            bool anySuccess = false;
-
-            try
-            {
-                anySuccess = SendRedundantlyPath(readyPaths, packet);
-            }
-            catch (const std::exception& e)
-            {
-                NS_LOG_ERROR("Exception in redundant send: " << e.what());
-            }
-
-            // Schedule next transmission regardless of success
-            Time nextTime = anySuccess ? Seconds((m_packetSize * 8.0) / m_totalRate.GetBitRate())
-                                       : MilliSeconds(50);
-
-            if (m_sendEvent.IsPending())
-            {
-                Simulator::Cancel(m_sendEvent);
-            }
-
-            m_sendEvent = Simulator::Schedule(nextTime, &MultiPathNadaClient::SendPackets, this);
-            return; // We're done with redundant case, important to return here
-        }
-
-        case FRAME_AWARE:
-            try
-            {
-                selectedPathId = GetFrameAwarePath(readyPaths, m_isKeyFrame);
-            }
-            catch (const std::exception& e)
-            {
-                NS_LOG_ERROR("Exception in frame-aware path selection: " << e.what());
-                if (!readyPaths.empty())
-                {
-                    selectedPathId = readyPaths[0]; // Fallback
-                }
-            }
-            break;
-
-        default:
-            // Default to first path for unknown strategies
-            NS_LOG_WARN("Unknown path selection strategy: " << m_pathSelectionStrategy);
-            if (!readyPaths.empty())
-            {
-                selectedPathId = readyPaths[0];
-            }
-            break;
-        }
-    }
-    catch (const std::exception& e)
-    {
-        NS_LOG_ERROR("Exception in path selection: " << e.what() << ", using fallback");
-        // Use first path as fallback
-        if (!readyPaths.empty())
-        {
-            selectedPathId = readyPaths[0];
-        }
-    }
-
-    // Final validation - ensure the path exists and we actually selected one
-    if (selectedPathId == 0 || m_paths.find(selectedPathId) == m_paths.end())
-    {
-        NS_LOG_WARN("Path selection failed, trying first available path");
-
-        // Try to use the first path as a fallback
-        if (!readyPaths.empty())
-        {
-            selectedPathId = readyPaths[0];
-        }
-        else
-        {
-            // No valid path found, reschedule and try again
-            NS_LOG_ERROR("No valid path available for sending");
-            if (m_sendEvent.IsPending())
-            {
-                Simulator::Cancel(m_sendEvent);
-            }
-            m_sendEvent =
-                Simulator::Schedule(MilliSeconds(100), &MultiPathNadaClient::SendPackets, this);
-            return;
-        }
-    }
-
-    // Send packet on the selected path
-    bool sent = false;
-
-    try
-    {
-        sent = SendPacketOnPath(selectedPathId, packet);
-    }
-    catch (const std::exception& e)
-    {
-        NS_LOG_ERROR("Exception sending packet on path " << selectedPathId << ": " << e.what());
-    }
-
-    if (sent)
-    {
-        NS_LOG_INFO("Sent packet on path " << selectedPathId);
-
-        // Schedule next packet with appropriate pacing
-        double interval = (m_packetSize * 8.0) / m_totalRate.GetBitRate();
-        Time nextSendTime = Seconds(std::max(0.001, interval)); // At least 1ms
-
-        if (m_sendEvent.IsPending())
-        {
-            Simulator::Cancel(m_sendEvent);
-        }
-        m_sendEvent = Simulator::Schedule(nextSendTime, &MultiPathNadaClient::SendPackets, this);
-    }
-    else
-    {
-        NS_LOG_WARN("Failed to send packet on path " << selectedPathId);
-        // Retry sooner if send failed
-        if (m_sendEvent.IsPending())
-        {
-            Simulator::Cancel(m_sendEvent);
-        }
-        m_sendEvent =
-            Simulator::Schedule(MilliSeconds(50), &MultiPathNadaClient::SendPackets, this);
     }
 }
 
@@ -1410,6 +1271,11 @@ MultiPathNadaClient::Send(Ptr<Packet> packet)
 
         case FRAME_AWARE: {
             selectedPathId = GetFrameAwarePath(readyPaths, m_isKeyFrame);
+            break;
+        }
+
+        case BUFFER_AWARE: {
+            selectedPathId = GetBufferAwarePath(readyPaths);
             break;
         }
 
@@ -1569,8 +1435,7 @@ void
 MultiPathNadaClient::ValidateAllSockets(void)
 {
     NS_LOG_FUNCTION(this);
-    bool allReady = true;
-    bool anyReady = false;
+
     uint32_t readyCount = 0;
     uint32_t totalCount = 0;
 
@@ -1579,86 +1444,66 @@ MultiPathNadaClient::ValidateAllSockets(void)
         uint32_t pathId = pathPair.first;
         totalCount++;
 
-        Ptr<Socket> socket = nullptr;
-
         try
         {
-            if (pathPair.second.client != nullptr)
+            if (!pathPair.second.client)
             {
-                socket = pathPair.second.client->GetSocket();
-                bool ready = IsSocketReady(socket);
+                NS_LOG_WARN("Path " << pathId << " has null client, reinitializing...");
+                Simulator::Schedule(MilliSeconds(100),
+                                  &MultiPathNadaClient::InitializePathSocket,
+                                  this, pathId);
+                continue;
+            }
 
-                if (ready)
+            Ptr<Socket> socket = pathPair.second.client->GetSocket();
+            if (!socket)
+            {
+                NS_LOG_WARN("Path " << pathId << " has null socket, reinitializing...");
+                Simulator::Schedule(MilliSeconds(100),
+                                  &MultiPathNadaClient::InitializePathSocket,
+                                  this, pathId);
+                continue;
+            }
+
+            bool ready = IsSocketReady(socket);
+            if (ready)
+            {
+                readyCount++;
+                NS_LOG_DEBUG("Path " << pathId << " socket is ready");
+
+                // **FIX: Initialize NADA here if not done**
+                if (pathPair.second.nada && !pathPair.second.nada->IsInitialized())
                 {
-                    anyReady = true;
-                    readyCount++;
-                    NS_LOG_INFO("Path " << pathId << " socket ready");
-
-                    // Initialize NADA controller with the socket
-                    if (pathPair.second.nada)
-                    {
-                        try
-                        {
-                            pathPair.second.nada->Init(socket);
-                            NS_LOG_INFO("NADA controller initialized for path " << pathId);
-                        }
-                        catch (const std::exception& e)
-                        {
-                            NS_LOG_ERROR("Failed to initialize NADA for path " << pathId << ": "
-                                                                               << e.what());
-                        }
-                    }
-                }
-                else
-                {
-                    allReady = false;
-                    NS_LOG_WARN("Path " << pathId << " socket not ready (errno="
-                                        << (socket ? socket->GetErrno() : -1) << ")");
-
-                    // Try to reinitialize the socket
-                    Simulator::Schedule(MilliSeconds(100),
-                                        &MultiPathNadaClient::InitializePathSocket,
-                                        this,
-                                        pathId);
+                    pathPair.second.nada->Init(socket);
+                    pathPair.second.nada->SetInitialRate(pathPair.second.currentRate);
                 }
             }
             else
             {
-                allReady = false;
-                NS_LOG_WARN("Path " << pathId << " client is null");
+                NS_LOG_WARN("Path " << pathId << " socket not ready");
             }
         }
         catch (const std::exception& e)
         {
-            allReady = false;
             NS_LOG_ERROR("Exception checking socket for path " << pathId << ": " << e.what());
         }
     }
 
-    // Report validation results
-    if (!anyReady && totalCount > 0)
+    // **FIX: More lenient validation**
+    if (readyCount == 0 && totalCount > 0)
     {
         NS_LOG_WARN("No sockets are ready (" << readyCount << "/" << totalCount
-                                             << "), scheduling validation retry in 1s");
+                   << "), scheduling validation retry in 1s");
         Simulator::Schedule(Seconds(1.0), &MultiPathNadaClient::ValidateAllSockets, this);
         return;
     }
 
-    if (!allReady)
-    {
-        NS_LOG_INFO("Some paths are not ready (" << readyCount << "/" << totalCount
-                                                 << "), but we can proceed with those that are");
-    }
-    else
-    {
-        NS_LOG_INFO("All paths (" << totalCount << ") validated successfully");
-    }
+    NS_LOG_INFO("Socket validation: " << readyCount << "/" << totalCount << " ready");
 
-    // Schedule a status report to get more details about sockets
+    // Schedule periodic status reports
     Simulator::Schedule(MilliSeconds(500), &MultiPathNadaClient::ReportSocketStatus, this);
-
-    NS_LOG_INFO("Socket validation complete, ready to start sending");
 }
+
 
 void
 MultiPathNadaClient::GetAvailablePaths(std::vector<uint32_t>& outPaths) const
@@ -1751,6 +1596,21 @@ MultiPathNadaClient::VideoFrameAcked(uint32_t pathId, bool isKeyFrame, uint32_t 
         Time frameInterval = Seconds(1.0 / 30.0); // Assuming 30 fps
         it->second.nada->UpdateVideoFrameInfo(frameSize, isKeyFrame, frameInterval);
     }
+}
+
+void
+MultiPathNadaClient::SetVideoReceiver(Ptr<VideoReceiver> receiver)
+{
+    NS_LOG_FUNCTION(this << receiver);
+    m_videoReceiver = receiver;
+}
+
+void
+MultiPathNadaClient::SetBufferAwareParameters(double targetBufferLength, double bufferWeightFactor)
+{
+    NS_LOG_FUNCTION(this << targetBufferLength << bufferWeightFactor);
+    m_targetBufferLength = targetBufferLength;
+    m_bufferWeightFactor = std::max(0.0, std::min(1.0, bufferWeightFactor)); // Clamp to [0,1]
 }
 
 bool
@@ -1895,22 +1755,25 @@ MultiPathNadaClient::IsReady(void) const
 }
 
 bool
-MultiPathNadaClient::IsSocketReady(Ptr<Socket> socket) const
+MultiPathNadaClient::IsSocketReady(Ptr<Socket> socket)
 {
     if (!socket)
     {
         return false;
     }
-    try
-    {
-        Socket::SocketErrno error = socket->GetErrno();
 
-        return (error == Socket::ERROR_NOTERROR);
-    }
-    catch (const std::exception& e)
+    // Check if socket is connected
+    if (socket->GetSocketType() == Socket::NS3_SOCK_DGRAM)
     {
-        NS_LOG_ERROR("Exception checking socket: " << e.what());
-        return false;
+        // For UDP sockets, check if they're bound and have available buffer space
+        return socket->GetTxAvailable() > 0;
+    }
+    else
+    {
+        // For TCP sockets, check connection state and buffer availability
+        return (socket->GetSocketType() != Socket::NS3_SOCK_STREAM ||
+                socket->GetErrno() == Socket::ERROR_NOTERROR) &&
+               socket->GetTxAvailable() > 0;
     }
 }
 

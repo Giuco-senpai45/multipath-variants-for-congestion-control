@@ -82,11 +82,16 @@ VideoReceiver::StartApplication(void)
     {
         TypeId tid = TypeId::LookupByName("ns3::UdpSocketFactory");
         m_socket = Socket::CreateSocket(GetNode(), tid);
+
         InetSocketAddress local = InetSocketAddress(Ipv4Address::GetAny(), m_port);
         if (m_socket->Bind(local) == -1)
         {
             NS_FATAL_ERROR("Failed to bind socket");
         }
+
+        // Enable broadcast for sending ACKs
+        m_socket->SetAllowBroadcast(true);
+        m_socket->SetAttribute("RcvBufSize", UintegerValue(1000000));
     }
 
     m_socket->SetRecvCallback(MakeCallback(&VideoReceiver::HandleRead, this));
@@ -156,74 +161,168 @@ VideoReceiver::ProcessVideoPacket(Ptr<Packet> packet, Address from, const NadaHe
 {
     NS_LOG_FUNCTION(this << packet << from);
 
-    // Extract frame information from header
-    uint32_t frameId = header.GetSequenceNumber() / 1000; // Using the high bits for frame ID
-    uint32_t packetId = header.GetSequenceNumber() % 1000; // Low bits for packet ID within frame
-    bool isKeyFrame = (header.GetVideoFrameType() == 0); // 0 = KEY_FRAME in the enum
+    // Extract frame information from NADA header
+    uint32_t sequenceNumber = header.GetSequenceNumber();
+    uint32_t frameId, packetId;
+
+    // **CRITICAL FIX: Handle both aggregate and multipath sequence formats**
+    if (sequenceNumber >= 1000) {
+        // Frame.Packet format (1000+ indicates frame ID encoding)
+        frameId = sequenceNumber / 1000;
+        packetId = sequenceNumber % 1000;
+    } else {
+        // Legacy format - convert to frame-based
+        static uint32_t legacyFrameId = 1;
+        static uint32_t legacyPacketCount = 0;
+
+        if (legacyPacketCount >= 15) { // 15 packets per frame
+            legacyFrameId++;
+            legacyPacketCount = 0;
+        }
+
+        frameId = legacyFrameId;
+        packetId = legacyPacketCount;
+        legacyPacketCount++;
+    }
+
+    bool isKeyFrame = (header.GetVideoFrameType() == 0);
     uint32_t frameSize = header.GetVideoFrameSize();
     uint32_t packetSize = packet->GetSize();
 
-    NS_LOG_DEBUG("Processing video packet: frameId=" << frameId
-                << ", packetId=" << packetId
-                << ", isKeyFrame=" << (isKeyFrame ? "true" : "false")
-                << ", size=" << packetSize);
+    // **Force minimum frame size for aggregate client**
+    if (frameSize == 0 || frameSize < packetSize * 10) {
+        frameSize = packetSize * 15; // Assume 15 packets per frame
+    }
 
-    // Update last frame ID if needed
-    if (frameId > m_lastFrameId)
-    {
+    SendAcknowledgment(from, header);
+
+    Time currentTime = Simulator::Now();
+
+    // Update last frame ID
+    if (frameId > m_lastFrameId) {
         m_lastFrameId = frameId;
     }
 
-    // Find or create the frame
-    if (m_incompleteFrames.find(frameId) == m_incompleteFrames.end())
-    {
-        // Create a new frame and initialize all its properties
+    // Find or create frame
+    if (m_incompleteFrames.find(frameId) == m_incompleteFrames.end()) {
         VideoFrame newFrame(frameId, isKeyFrame);
-        newFrame.firstPacketTime = Simulator::Now();
-        newFrame.lastPacketTime = Simulator::Now();
+        newFrame.firstPacketTime = currentTime;
+        newFrame.lastPacketTime = currentTime;
         newFrame.totalSize = 0;
         newFrame.complete = false;
-
         m_incompleteFrames[frameId] = newFrame;
+
+        NS_LOG_DEBUG("Created frame " << frameId << " (" << (isKeyFrame ? "KEY" : "DELTA") << ")"
+                    << " - expected size: " << frameSize);
     }
 
     VideoFrame& frame = m_incompleteFrames[frameId];
 
-    // Add packet to the frame
-    VideoPacket vPacket(frameId, packetId, isKeyFrame, packetSize, Simulator::Now());
+    // Add packet to frame
+    VideoPacket vPacket(frameId, packetId, isKeyFrame, packetSize, currentTime);
     frame.packets.push_back(vPacket);
     frame.totalSize += packetSize;
-    frame.lastPacketTime = Simulator::Now();
+    frame.lastPacketTime = currentTime;
 
-    // Simple heuristic for frame completion:
-    // If it's a key frame, we need more packets (average key frame is 1.5x larger)
-    uint32_t expectedPackets = isKeyFrame ? 3 : 2;
+    // **CRITICAL FIX: More aggressive frame completion for aggregate client**
+    Time assemblyTime = currentTime - frame.firstPacketTime;
 
-    // If we have received enough packets and the total size is reasonable, mark as complete
-    if (frame.packets.size() >= expectedPackets && frame.totalSize >= frameSize * 0.9)
-    {
+    // **SIMPLIFIED completion criteria**
+    bool hasMinPackets = (frame.packets.size() >= 3); // Minimum 3 packets
+    bool hasReasonableSize = (frame.totalSize >= frameSize * 0.3); // 30% of expected size
+    bool hasTimeout = (assemblyTime >= MilliSeconds(50)); // 50ms timeout
+    bool hasMaxPackets = (frame.packets.size() >= 20); // Max 20 packets per frame
+
+    if ((hasMinPackets && hasReasonableSize) || hasTimeout || hasMaxPackets) {
         frame.complete = true;
 
-        // Move from incomplete to buffer
+        NS_LOG_INFO("Frame " << frameId << " completed: "
+                   << frame.packets.size() << " packets, "
+                   << frame.totalSize << " bytes, "
+                   << assemblyTime.GetMilliSeconds() << "ms assembly"
+                   << (hasTimeout ? " (TIMEOUT)" : "")
+                   << (hasMaxPackets ? " (MAX_PACKETS)" : ""));
+
+        // Add to buffer immediately
         m_frameBuffer.push_back(frame);
         m_incompleteFrames.erase(frameId);
 
-        NS_LOG_INFO("Frame " << frameId << " completed and added to buffer, buffer size: "
-                   << m_frameBuffer.size() << " frames");
+        NS_LOG_INFO("Frame " << frameId << " added to buffer (buffer size: " << m_frameBuffer.size() << ")");
     }
 
-    // Clean up old incomplete frames (if they're way behind the latest frame)
-    for (auto it = m_incompleteFrames.begin(); it != m_incompleteFrames.end(); )
-    {
-        if (m_lastFrameId - it->first > 10) // If more than 10 frames behind
-        {
-            NS_LOG_INFO("Discarding incomplete frame " << it->first << " (too old)");
+    // Clean up old incomplete frames
+    for (auto it = m_incompleteFrames.begin(); it != m_incompleteFrames.end(); ) {
+        if (it->first < frameId - 3) { // Keep only last 3 frames
+            NS_LOG_DEBUG("Cleaning up stale frame " << it->first);
             it = m_incompleteFrames.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void
+VideoReceiver::SendAcknowledgment(Address from, const NadaHeader& originalHeader)
+{
+    NS_LOG_FUNCTION(this << from);
+
+    if (!m_socket)
+    {
+        NS_LOG_ERROR("Cannot send ACK: socket is null");
+        return;
+    }
+
+    try
+    {
+        // Create ACK packet with minimal size
+        Ptr<Packet> ackPacket = Create<Packet>(64);
+
+        // Create ACK header based on original packet
+        NadaHeader ackHeader;
+        ackHeader.SetSequenceNumber(originalHeader.GetSequenceNumber());
+        ackHeader.SetTimestamp(Simulator::Now()); // Current time for RTT calculation
+        ackHeader.SetVideoFrameType(originalHeader.GetVideoFrameType());
+        ackHeader.SetVideoFrameSize(originalHeader.GetVideoFrameSize());
+
+        ackPacket->AddHeader(ackHeader);
+
+        // Send ACK back to sender
+        int sent = m_socket->SendTo(ackPacket, 0, from);
+
+        if (sent > 0)
+        {
+            NS_LOG_DEBUG("ACK sent for sequence " << originalHeader.GetSequenceNumber()
+                        << " to " << InetSocketAddress::ConvertFrom(from).GetIpv4());
         }
         else
         {
-            ++it;
+            NS_LOG_WARN("Failed to send ACK for sequence " << originalHeader.GetSequenceNumber());
         }
+    }
+    catch (const std::exception& e)
+    {
+        NS_LOG_ERROR("Exception sending ACK: " << e.what());
+    }
+}
+
+void
+VideoReceiver::CheckRebuffering()
+{
+    NS_LOG_FUNCTION(this);
+
+    // Check if we have enough frames to resume playback
+    uint32_t minimumFrames = std::max(2U, m_frameRate / 10); // At least 100ms worth of frames
+
+    if (m_frameBuffer.size() >= minimumFrames) {
+        NS_LOG_INFO("Rebuffering complete, resuming playback with "
+                   << m_frameBuffer.size() << " frames");
+        // Resume normal consumption
+        m_consumeEvent = Simulator::Schedule(m_frameInterval, &VideoReceiver::ConsumeFrame, this);
+    } else {
+        NS_LOG_INFO("Still rebuffering, need " << minimumFrames
+                   << " frames, have " << m_frameBuffer.size());
+        // Continue rebuffering
+        m_consumeEvent = Simulator::Schedule(MilliSeconds(100), &VideoReceiver::CheckRebuffering, this);
     }
 }
 
@@ -232,30 +331,38 @@ VideoReceiver::ConsumeFrame()
 {
     NS_LOG_FUNCTION(this);
 
-    if (m_frameBuffer.empty())
-    {
-        // Buffer underrun!
+    if (m_frameBuffer.empty()) {
         m_bufferUnderruns++;
-        NS_LOG_WARN("Buffer underrun #" << m_bufferUnderruns << " at time "
-                   << Simulator::Now().GetSeconds() << "s");
-    }
-    else
-    {
-        // Consume the oldest frame in the buffer
-        VideoFrame frame = m_frameBuffer.front();
-        m_frameBuffer.pop_front();
-        m_consumedFrames++;
+        NS_LOG_WARN("Buffer underrun #" << m_bufferUnderruns);
 
-        Time delay = Simulator::Now() - frame.firstPacketTime;
-        NS_LOG_INFO("Consumed frame " << frame.frameId
-                   << " (key=" << (frame.isKeyFrame ? "yes" : "no")
-                   << ", size=" << frame.totalSize << " bytes"
-                   << ", delay=" << delay.GetMilliSeconds() << "ms"
-                   << "), remaining buffer: " << m_frameBuffer.size() << " frames");
+        // **FIX: Consistent rebuffering across simulations**
+        Time rebufferTime = MilliSeconds(300); // Consistent rebuffer time
+
+        m_consumeEvent = Simulator::Schedule(rebufferTime, &VideoReceiver::CheckRebuffering, this);
+        return;
     }
 
-    // Schedule next frame consumption
-    m_consumeEvent = Simulator::Schedule(m_frameInterval, &VideoReceiver::ConsumeFrame, this);
+    // Consume frame
+    VideoFrame frame = m_frameBuffer.front();
+    m_frameBuffer.pop_front();
+    m_consumedFrames++;
+
+    Time delay = Simulator::Now() - frame.firstPacketTime;
+    NS_LOG_INFO("Consumed frame " << frame.frameId
+               << ", buffer size: " << m_frameBuffer.size()
+               << ", delay: " << delay.GetMilliSeconds() << "ms");
+
+    // **FIX: Consistent consumption timing**
+    Time nextInterval = m_frameInterval;
+
+    // Buffer-aware consumption adjustment
+    if (m_frameBuffer.size() < 2) {
+        nextInterval = m_frameInterval * 1.2; // Slow down when buffer low
+    } else if (m_frameBuffer.size() > 8) {
+        nextInterval = m_frameInterval * 0.8; // Speed up when buffer high
+    }
+
+    m_consumeEvent = Simulator::Schedule(nextInterval, &VideoReceiver::ConsumeFrame, this);
 }
 
 void
@@ -320,7 +427,8 @@ VideoReceiver::GetAverageBufferLength() const
         sum += length;
     }
 
-    return sum / m_bufferLengthSamples.size() * m_frameInterval.GetMilliSeconds();
+    double avgFrames = sum / m_bufferLengthSamples.size();
+    return avgFrames * m_frameInterval.GetMilliSeconds();
 }
 
 // VideoReceiverHelper implementation

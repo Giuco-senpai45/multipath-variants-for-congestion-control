@@ -86,6 +86,14 @@ public:
           lastPacketTime(Seconds(0)) {}
   };
 
+    /**
+     * \brief Set the local address and port to bind to
+     *
+     * \param address The local address to bind to
+     * \param port The port to bind to
+     */
+  void SendAcknowledgment(Address from, const NadaHeader& originalHeader);
+
   /**
    * \brief Set the frame rate
    *
@@ -136,6 +144,8 @@ private:
    * \param header The NADA header
    */
   void ProcessVideoPacket (Ptr<Packet> packet, Address from, const NadaHeader& header);
+
+  void CheckRebuffering();
 
   /**
    * \brief Consume a frame from the buffer

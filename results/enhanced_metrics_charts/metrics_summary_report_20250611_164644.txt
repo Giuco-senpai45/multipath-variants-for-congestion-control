@@ -1,0 +1,82 @@
+ENHANCED METRICS ANALYSIS REPORT
+==================================================
+
+Generated on: 2025-06-11 16:47:03
+Total charts generated: 10
+Dashboard generated: /Users/dani/Desktop/Coding/uni/ns-allinone-3.44/ns-3.44/results/enhanced_metrics_charts/metrics_dashboard_20250611_164644.png
+
+METRIC IMPROVEMENT SUMMARY:
+------------------------------
+
+Buffer Length (ms):
+  Average Improvement: -34.19%
+  Best Case: 414.64%
+  Worst Case: -100.00%
+  Scenarios Tested: 50
+
+Buffer Underruns:
+  Average Improvement: 75.62%
+  Best Case: 100.00%
+  Worst Case: -35.71%
+  Scenarios Tested: 50
+
+Delay (seconds):
+  Average Improvement: 0.85%
+  Best Case: 8.20%
+  Worst Case: -4.46%
+  Scenarios Tested: 50
+
+Delivery Efficiency (%):
+  Average Improvement: nan%
+  Best Case: nan%
+  Worst Case: nan%
+  Scenarios Tested: 50
+
+Estimated MOS (1-5):
+  Average Improvement: -0.71%
+  Best Case: 0.88%
+  Worst Case: -12.48%
+  Scenarios Tested: 50
+
+Jitter (seconds):
+  Average Improvement: 70.71%
+  Best Case: 90.27%
+  Worst Case: -105.97%
+  Scenarios Tested: 50
+
+Loss (%):
+  Average Improvement: -19.72%
+  Best Case: 99.91%
+  Worst Case: -148.37%
+  Scenarios Tested: 50
+
+Path Utilization Ratio (%):
+  Average Improvement: nan%
+  Best Case: nan%
+  Worst Case: nan%
+  Scenarios Tested: 50
+
+Throughput (Mbps):
+  Average Improvement: 120.10%
+  Best Case: 219.35%
+  Worst Case: 59.13%
+  Scenarios Tested: 50
+
+Throughput Stability (stddev):
+  Average Improvement: -147.93%
+  Best Case: -84.30%
+  Worst Case: -218.52%
+  Scenarios Tested: 50
+
+GENERATED CHARTS:
+---------------
+  enhanced_Buffer_Length_ms_20250611_164644.png
+  enhanced_Buffer_Underruns_20250611_164644.png
+  enhanced_Delay_seconds_20250611_164644.png
+  enhanced_Delivery_Efficiency_pct_20250611_164644.png
+  enhanced_Estimated_MOS_1-5_20250611_164644.png
+  enhanced_Jitter_seconds_20250611_164644.png
+  enhanced_Loss_pct_20250611_164644.png
+  enhanced_Path_Utilization_Ratio_pct_20250611_164644.png
+  enhanced_Throughput_Mbps_20250611_164644.png
+  enhanced_Throughput_Stability_stddev_20250611_164644.png

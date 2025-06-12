@@ -11,6 +11,7 @@
 #include "ns3/ptr.h"
 #include "ns3/socket.h"
 #include "ns3/traced-callback.h"
+#include "ns3/point-to-point-net-device.h"
 
 #include <deque>
 #include <vector>
@@ -34,6 +35,12 @@ class NadaCongestionControl : public Object
      * \param socket The socket to use
      */
     void Init(Ptr<Socket> socket);
+
+    /**
+     * \brief Set the initial sending rate
+     * \param linkCapacity The link capacity to set as initial rate
+     */
+    void SetInitialRate(DataRate linkCapacity);
 
     /**
      * \brief Process an acknowledgment
